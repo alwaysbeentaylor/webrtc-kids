@@ -32,21 +32,43 @@ class WebRTCService {
   private callTimeout: ReturnType<typeof setTimeout> | null = null;
   private pendingOffer: { fromUserId: string; offer: RTCSessionDescriptionInit } | null = null;
 
-  // STUN servers (Google's public STUN servers + additional for better connectivity)
+  // STUN/TURN servers - TURN servers zijn essentieel voor Android NAT traversal
   private readonly rtcConfig: RTCConfiguration = {
     iceServers: [
+      // Google STUN servers
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' },
       { urls: 'stun:stun3.l.google.com:19302' },
       { urls: 'stun:stun4.l.google.com:19302' },
-      // Additional STUN servers for better connectivity
+      // Additional STUN servers
       { urls: 'stun:stun.stunprotocol.org:3478' },
       { urls: 'stun:stun.voiparound.com' },
-      { urls: 'stun:stun.voipbuster.com' }
-      // TURN servers kunnen later worden toegevoegd voor betere NAT traversal
+      { urls: 'stun:stun.voipbuster.com' },
+      // Free TURN servers (essential for Android NAT traversal)
+      { 
+        urls: 'turn:openrelay.metered.ca:80',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      { 
+        urls: 'turn:openrelay.metered.ca:443',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      { 
+        urls: 'turn:openrelay.metered.ca:80?transport=tcp',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      { 
+        urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      }
     ],
-    iceCandidatePoolSize: 10 // Pre-gather more candidates for faster connection
+    iceCandidatePoolSize: 10, // Pre-gather more candidates for faster connection
+    iceTransportPolicy: 'all' // Use both relay and non-relay candidates
   };
 
   private constructor() {
@@ -244,16 +266,27 @@ class WebRTCService {
 
       // Request permissions with better error handling
       // Try video + audio first, fallback to audio only if video fails
+      // Android-optimized constraints
+      const isAndroid = /Android/i.test(navigator.userAgent);
+      const videoConstraints = isAndroid ? {
+        width: { ideal: 640, max: 1280 },
+        height: { ideal: 480, max: 720 },
+        facingMode: 'user', // Front camera
+        frameRate: { ideal: 30, max: 30 } // Lower frame rate for Android
+      } : {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        facingMode: 'user'
+      };
+
       try {
         this.localStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: 'user' // Front camera
-          },
+          video: videoConstraints,
           audio: {
             echoCancellation: true,
-            noiseSuppression: true
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 48000 // Better quality for Android
           }
         });
       } catch (videoError) {
@@ -263,7 +296,9 @@ class WebRTCService {
           video: false,
           audio: {
             echoCancellation: true,
-            noiseSuppression: true
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 48000
           }
         });
         console.log('✅ Audio-only stream created (no video)');
@@ -317,11 +352,14 @@ class WebRTCService {
         // Try audio only as fallback
         try {
           console.log('🔄 Trying audio-only stream for outgoing call...');
+          const isAndroid = /Android/i.test(navigator.userAgent);
           stream = await navigator.mediaDevices.getUserMedia({
             video: false,
             audio: {
               echoCancellation: true,
-              noiseSuppression: true
+              noiseSuppression: true,
+              autoGainControl: true,
+              sampleRate: isAndroid ? 48000 : undefined
             }
           });
           console.log('✅ Audio-only stream created for outgoing call');
@@ -507,11 +545,14 @@ class WebRTCService {
         // Try audio only as last resort
         try {
           console.log('🔄 Trying audio-only stream...');
+          const isAndroid = /Android/i.test(navigator.userAgent);
           stream = await navigator.mediaDevices.getUserMedia({
             video: false,
             audio: {
               echoCancellation: true,
-              noiseSuppression: true
+              noiseSuppression: true,
+              autoGainControl: true,
+              sampleRate: isAndroid ? 48000 : undefined
             }
           });
           console.log('✅ Audio-only stream created for incoming call');
