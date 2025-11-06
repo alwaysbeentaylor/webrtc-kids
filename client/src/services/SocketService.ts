@@ -60,7 +60,7 @@ class SocketService {
 
     // FORCE token to be sent in multiple ways
     const connectionOptions: any = {
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'], // Try websocket first, fallback to polling
       auth: {
         token: token
       },

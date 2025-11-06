@@ -158,9 +158,13 @@ class FirebaseService {
       'auth/user-disabled': 'Dit account is uitgeschakeld',
       'auth/user-not-found': 'Geen account gevonden met dit email adres',
       'auth/wrong-password': 'Verkeerd wachtwoord',
-      'auth/invalid-credential': 'Verkeerde inloggegevens'
+      'auth/invalid-credential': 'Verkeerde inloggegevens',
+      'auth/network-request-failed': 'Geen internetverbinding. Controleer je internetverbinding.',
+      'auth/too-many-requests': 'Te veel pogingen. Probeer het later opnieuw.',
+      'auth/invalid-api-key': 'Firebase is niet correct geconfigureerd. Controleer je environment variables.',
+      'auth/app-not-authorized': 'Firebase app is niet geautoriseerd. Controleer je Firebase configuratie.'
     };
-    return errorMessages[code] || 'Er is een fout opgetreden';
+    return errorMessages[code] || `Er is een fout opgetreden (${code})`;
   }
 }
 

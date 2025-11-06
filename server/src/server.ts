@@ -36,6 +36,7 @@ const PORT = Number(process.env.PORT || 4000);
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 
 // Allow multiple origins for local network access (both HTTP and HTTPS)
+// Also allow Vercel deployments and custom domains
 const allowedOrigins = [
   CLIENT_ORIGIN,
   'http://localhost:5173',
@@ -49,12 +50,21 @@ const allowedOrigins = [
   // Allow any local network IP (both HTTP and HTTPS)
   /^https?:\/\/192\.168\.\d+\.\d+:5173$/,
   /^https?:\/\/10\.\d+\.\d+\.\d+:5173$/,
+  // Allow Vercel deployments (any .vercel.app domain)
+  /^https:\/\/.*\.vercel\.app$/,
+  // Allow any HTTPS origin for production (more permissive for deployment)
+  /^https:\/\/.*$/,
 ];
 
 app.use(cors({ 
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+    if (!origin) {
+      console.log('✅ CORS: Allowing request with no origin');
+      return callback(null, true);
+    }
+    
+    console.log('🔍 CORS: Checking origin:', origin);
     
     // Check if origin is in allowed list
     const isAllowed = allowedOrigins.some(allowed => {
@@ -67,10 +77,11 @@ app.use(cors({
     });
     
     if (isAllowed) {
+      console.log('✅ CORS: Allowing origin:', origin);
       callback(null, true);
     } else {
-      console.log('⚠️ Blocked origin:', origin);
-      callback(null, true); // Allow anyway for development
+      console.log('⚠️ CORS: Origin not in allowed list, but allowing anyway:', origin);
+      callback(null, true); // Allow anyway for development/production flexibility
     }
   },
   credentials: true
@@ -85,7 +96,12 @@ const io = new SocketIOServer(server, {
   cors: {
     origin: (origin, callback) => {
       // Allow requests with no origin
-      if (!origin) return callback(null, true);
+      if (!origin) {
+        console.log('✅ Socket.IO CORS: Allowing request with no origin');
+        return callback(null, true);
+      }
+      
+      console.log('🔍 Socket.IO CORS: Checking origin:', origin);
       
       // Check if origin is in allowed list
       const isAllowed = allowedOrigins.some(allowed => {
@@ -98,15 +114,17 @@ const io = new SocketIOServer(server, {
       });
       
       if (isAllowed) {
+        console.log('✅ Socket.IO CORS: Allowing origin:', origin);
         callback(null, true);
       } else {
-        console.log('⚠️ Socket.IO blocked origin:', origin);
-        callback(null, true); // Allow anyway for development
+        console.log('⚠️ Socket.IO CORS: Origin not in allowed list, but allowing anyway:', origin);
+        callback(null, true); // Allow anyway for development/production flexibility
       }
     },
     methods: ['GET', 'POST'],
     credentials: true
-  }
+  },
+  transports: ['websocket', 'polling'] // Allow both transports
 });
 
 // Authentication middleware for socket connections
@@ -333,8 +351,9 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`✅✅✅ Signaling server listening on http://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅✅✅ Signaling server listening on http://0.0.0.0:${PORT}`);
   console.log(`✅✅✅ Server is ready to accept connections`);
   console.log(`✅✅✅ Watching for child token connections...`);
+  console.log(`✅✅✅ CORS configured for Vercel and HTTPS origins`);
 });

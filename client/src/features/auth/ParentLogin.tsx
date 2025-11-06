@@ -37,12 +37,14 @@ export function ParentLogin() {
         }
       }
     } catch (err) {
+      console.error('Login/Register error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Er is iets misgegaan';
       
       // Check if Firebase is not configured
       if (errorMessage.includes('api-key') || errorMessage.includes('API key') || 
-          errorMessage.includes('invalid') && errorMessage.includes('key')) {
-        setError('Firebase is niet geconfigureerd! Vul je .env bestand in met je Firebase configuratie. Zie FIREBASE_SETUP_GUIDE.md voor instructies.');
+          errorMessage.includes('invalid') && errorMessage.includes('key') ||
+          errorMessage.includes('Firebase is niet correct geconfigureerd')) {
+        setError('Firebase is niet geconfigureerd! Voeg je Firebase environment variables toe in Vercel: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_STORAGE_BUCKET, VITE_FIREBASE_MESSAGING_SENDER_ID, VITE_FIREBASE_APP_ID');
       } else {
         setError(errorMessage);
       }
