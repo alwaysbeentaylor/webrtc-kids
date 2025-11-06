@@ -32,14 +32,21 @@ class WebRTCService {
   private callTimeout: ReturnType<typeof setTimeout> | null = null;
   private pendingOffer: { fromUserId: string; offer: RTCSessionDescriptionInit } | null = null;
 
-  // STUN servers (Google's public STUN servers)
+  // STUN servers (Google's public STUN servers + additional for better connectivity)
   private readonly rtcConfig: RTCConfiguration = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' }
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+      // Additional STUN servers for better connectivity
+      { urls: 'stun:stun.stunprotocol.org:3478' },
+      { urls: 'stun:stun.voiparound.com' },
+      { urls: 'stun:stun.voipbuster.com' }
       // TURN servers kunnen later worden toegevoegd voor betere NAT traversal
-    ]
+    ],
+    iceCandidatePoolSize: 10 // Pre-gather more candidates for faster connection
   };
 
   private constructor() {
@@ -356,9 +363,35 @@ class WebRTCService {
           if (this.peerConnection.iceConnectionState === 'connected' || 
               this.peerConnection.iceConnectionState === 'completed') {
             console.log('✅✅✅ ICE connection established!');
+            // Clear timeout once connected
+            if (this.callTimeout) {
+              clearTimeout(this.callTimeout);
+              this.callTimeout = null;
+            }
           } else if (this.peerConnection.iceConnectionState === 'failed') {
-            console.error('❌ ICE connection failed');
-            this.updateCallState('failed');
+            console.error('❌ ICE connection failed - trying to restart ICE');
+            // Try to restart ICE gathering
+            if (this.peerConnection.restartIce) {
+              this.peerConnection.restartIce();
+              console.log('🔄 Restarting ICE gathering...');
+            } else {
+              // Fallback: mark as failed after retry
+              setTimeout(() => {
+                if (this.peerConnection && this.peerConnection.iceConnectionState === 'failed') {
+                  console.error('❌ ICE connection still failed after retry');
+                  this.updateCallState('failed');
+                }
+              }, 5000);
+            }
+          } else if (this.peerConnection.iceConnectionState === 'disconnected') {
+            console.warn('⚠️ ICE connection disconnected - may reconnect');
+            // Give it time to reconnect
+            setTimeout(() => {
+              if (this.peerConnection && this.peerConnection.iceConnectionState === 'disconnected') {
+                console.error('❌ ICE connection failed to reconnect');
+                this.updateCallState('failed');
+              }
+            }, 10000);
           }
         }
       };
@@ -425,13 +458,13 @@ class WebRTCService {
 
       console.log('📞 Call started to:', targetUserId);
 
-      // Set timeout for call - if no answer in 30 seconds, fail
+      // Set timeout for call - if no answer in 60 seconds, fail (increased from 30s)
       this.callTimeout = setTimeout(() => {
-        if (this.currentCall && this.currentCall.state === 'dialing') {
-          console.warn('⏱️ Call timeout - no answer received');
+        if (this.currentCall && (this.currentCall.state === 'dialing' || this.currentCall.state === 'ringing')) {
+          console.warn('⏱️ Call timeout - no answer received after 60 seconds');
           this.updateCallState('failed');
         }
-      }, 30000);
+      }, 60000); // Increased to 60 seconds
     } catch (error) {
       console.error('Error starting call:', error);
       this.cleanup();
@@ -521,8 +554,29 @@ class WebRTCService {
               this.peerConnection.iceConnectionState === 'completed') {
             console.log('✅✅✅ ICE connection established (incoming)!');
           } else if (this.peerConnection.iceConnectionState === 'failed') {
-            console.error('❌ ICE connection failed (incoming)');
-            this.updateCallState('failed');
+            console.error('❌ ICE connection failed (incoming) - trying to restart ICE');
+            // Try to restart ICE gathering
+            if (this.peerConnection.restartIce) {
+              this.peerConnection.restartIce();
+              console.log('🔄 Restarting ICE gathering (incoming)...');
+            } else {
+              // Fallback: mark as failed after retry
+              setTimeout(() => {
+                if (this.peerConnection && this.peerConnection.iceConnectionState === 'failed') {
+                  console.error('❌ ICE connection still failed after retry (incoming)');
+                  this.updateCallState('failed');
+                }
+              }, 5000);
+            }
+          } else if (this.peerConnection.iceConnectionState === 'disconnected') {
+            console.warn('⚠️ ICE connection disconnected (incoming) - may reconnect');
+            // Give it time to reconnect
+            setTimeout(() => {
+              if (this.peerConnection && this.peerConnection.iceConnectionState === 'disconnected') {
+                console.error('❌ ICE connection failed to reconnect (incoming)');
+                this.updateCallState('failed');
+              }
+            }, 10000);
           }
         }
       };

@@ -336,6 +336,14 @@ function App() {
   // Connect socket when authenticated
   useEffect(() => {
     const userId = currentUserId || authState.user?.uid;
+    console.log('🔌 Socket useEffect triggered:', {
+      userId,
+      familyId,
+      hasAuthUser: !!authState.user,
+      hasChildSession: !!childSession,
+      shouldConnect: !!(userId && familyId && (authState.user || childSession))
+    });
+    
     if (userId && familyId && (authState.user || childSession)) {
       const connectSocket = async () => {
         try {
@@ -347,7 +355,7 @@ function App() {
           
           // CRITICAL: Set up event handlers BEFORE connecting
           const handleConnect = () => {
-            console.log('✅ Socket connected for user:', userId);
+            console.log('✅✅✅ Socket connected for user:', userId);
             setSocketConnected(true);
             
             // Join user room immediately
@@ -377,6 +385,7 @@ function App() {
           };
           
           const handleDisconnect = () => {
+            console.log('❌ Socket disconnected');
             setSocketConnected(false);
             if (userId) {
               familyService.updateOnlineStatus(userId, false).catch(console.error);
@@ -412,17 +421,26 @@ function App() {
               console.warn('⚠️ Using DEV parent token fallback');
               return devParentToken;
             }
+            console.error('❌ No token available for socket connection');
             return null;
           });
           
           console.log('✅ Socket connect() call completed');
           
           // Give socket a moment to connect
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 2000));
           
-          console.log('🔍 Socket connection status:', socketService.isConnected());
+          const connected = socketService.isConnected();
+          console.log('🔍 Socket connection status after 2s:', connected);
+          if (!connected) {
+            console.warn('⚠️ Socket still not connected after 2 seconds. Check backend logs.');
+          }
         } catch (error) {
-          console.error('Failed to connect socket:', error);
+          console.error('❌❌❌ Failed to connect socket:', error);
+          if (error instanceof Error) {
+            console.error('Error message:', error.message);
+            console.error('Error stack:', error.stack);
+          }
         }
       };
 
@@ -437,6 +455,12 @@ function App() {
         }
       };
     } else {
+      console.log('⚠️ Socket connection skipped - missing requirements:', {
+        userId: !!userId,
+        familyId: !!familyId,
+        hasAuthUser: !!authState.user,
+        hasChildSession: !!childSession
+      });
       socketService.disconnect();
       setSocketConnected(false);
     }
