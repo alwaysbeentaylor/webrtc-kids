@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: webrtc-kids-backend
+    env: node
+    buildCommand: cd server && npm install && npm run build
+    startCommand: cd server && npm start
+    envVars:
+      - key: PORT
+        value: 4000
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /health
+

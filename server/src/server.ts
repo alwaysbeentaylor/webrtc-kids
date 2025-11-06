@@ -35,6 +35,12 @@ if (useHttps) {
 const PORT = Number(process.env.PORT || 4000);
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 
+console.log('🚀 Starting server...');
+console.log('📋 Environment variables:');
+console.log('  - PORT:', PORT);
+console.log('  - CLIENT_ORIGIN:', CLIENT_ORIGIN);
+console.log('  - NODE_ENV:', process.env.NODE_ENV || 'development');
+
 // Allow multiple origins for local network access (both HTTP and HTTPS)
 // Also allow Vercel deployments and custom domains
 const allowedOrigins = [
@@ -356,4 +362,10 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`✅✅✅ Server is ready to accept connections`);
   console.log(`✅✅✅ Watching for child token connections...`);
   console.log(`✅✅✅ CORS configured for Vercel and HTTPS origins`);
+}).on('error', (err: NodeJS.ErrnoException) => {
+  console.error('❌❌❌ Server failed to start:', err);
+  if (err.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is already in use`);
+  }
+  process.exit(1);
 });

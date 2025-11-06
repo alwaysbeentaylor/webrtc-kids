@@ -15,19 +15,25 @@ import { CallScreen } from './features/call/CallScreen';
 const getServerUrl = () => {
   // Check for environment variable first (for ngrok/external access)
   if (import.meta.env.VITE_BACKEND_URL) {
-    return import.meta.env.VITE_BACKEND_URL;
+    const url = import.meta.env.VITE_BACKEND_URL;
+    console.log('🌐 Using VITE_BACKEND_URL:', url);
+    return url;
   }
   
   // Check if we're running on localhost (development)
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    console.log('🌐 Using localhost backend');
     return 'http://localhost:4000';
   }
   
   // For local network IPs, use HTTP
-  return `http://${window.location.hostname}:4000`;
+  const url = `http://${window.location.hostname}:4000`;
+  console.log('🌐 Using local network backend:', url);
+  return url;
 };
 
 const SERVER_URL = getServerUrl();
+console.log('🌐🌐🌐 Final SERVER_URL:', SERVER_URL);
 
 // Function to play incoming call sound (repeating)
 let ringtoneInterval: ReturnType<typeof setInterval> | null = null;

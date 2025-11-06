@@ -86,7 +86,8 @@ class SocketService {
     this.socket.on('connect', () => {
       console.log('✅✅✅✅✅ Socket.IO CONNECTED!', {
         socketId: this.socket?.id,
-        connected: this.socket?.connected
+        connected: this.socket?.connected,
+        serverUrl: this.serverUrl
       });
     });
 
@@ -96,8 +97,15 @@ class SocketService {
       console.error('❌ Error details:', {
         message: (error as Error).message,
         type: anyError?.type,
-        description: anyError?.description
+        description: anyError?.description,
+        serverUrl: this.serverUrl,
+        tokenPrefix: token.substring(0, 30)
       });
+      
+      // Show user-friendly error
+      if (error.message.includes('xhr poll error') || error.message.includes('websocket error')) {
+        console.error('❌ Backend server is not reachable. Check if backend is running and VITE_BACKEND_URL is correct.');
+      }
     });
 
     this.socket.on('disconnect', (reason) => {

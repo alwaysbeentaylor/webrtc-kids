@@ -82,10 +82,13 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
     // Check initial connection state
     const checkConnection = () => {
       const connected = socketService.isConnected();
-      console.log('🔍 Checking socket connection:', connected);
+      console.log('🔍 Checking socket connection:', connected, 'SERVER_URL:', window.location.origin);
       setSocketConnected(connected);
       if (connected) {
         familyService.updateOnlineStatus(currentUserId, true).catch(console.error);
+      } else {
+        console.warn('⚠️ Socket is NOT connected. Check browser console for connection errors.');
+        console.warn('⚠️ Make sure VITE_BACKEND_URL is set correctly in Vercel environment variables.');
       }
     };
     
@@ -663,6 +666,14 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
               <p style={{ margin: '0.5rem 0', color: '#666', fontSize: '0.9rem' }}>
                 <strong>Status:</strong> {socketConnected ? '✅ Verbonden' : '❌ Niet verbonden'}
               </p>
+              <p style={{ margin: '0.5rem 0', color: '#666', fontSize: '0.9rem' }}>
+                <strong>Backend URL:</strong> {import.meta.env.VITE_BACKEND_URL || 'Niet ingesteld'}
+              </p>
+              {!socketConnected && (
+                <p style={{ margin: '0.5rem 0', color: '#f44336', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                  ⚠️ Backend niet bereikbaar. Check Vercel environment variables!
+                </p>
+              )}
               <p style={{ margin: '0.5rem 0', color: '#666', fontSize: '0.9rem' }}>
                 <strong>User ID:</strong> {currentUserId.substring(0, 20)}...
               </p>
