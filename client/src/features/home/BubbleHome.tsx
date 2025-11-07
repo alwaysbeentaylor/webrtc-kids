@@ -102,7 +102,7 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
         familyService.updateOnlineStatus(currentUserId, true).catch(console.error);
       } else {
         console.warn('⚠️ Socket is NOT connected. Check browser console for connection errors.');
-        console.warn('⚠️ Make sure VITE_BACKEND_URL is set correctly in Vercel environment variables.');
+        console.warn('⚠️ Make sure VITE_BACKEND_URL is set correctly in environment variables (Vercel/Render/etc).');
       }
     };
     
@@ -681,12 +681,26 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
                 <strong>Status:</strong> {socketConnected ? '✅ Verbonden' : '❌ Niet verbonden'}
               </p>
               <p style={{ margin: '0.5rem 0', color: '#666', fontSize: '0.9rem' }}>
-                <strong>Backend URL:</strong> {import.meta.env.VITE_BACKEND_URL || 'Niet ingesteld'}
+                <strong>Backend URL:</strong> {import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:4000' : `http://${window.location.hostname}:4000`)}
               </p>
               {!socketConnected && (
-                <p style={{ margin: '0.5rem 0', color: '#f44336', fontSize: '0.85rem', fontWeight: 'bold' }}>
-                  ⚠️ Backend niet bereikbaar. Check Vercel environment variables!
-                </p>
+                <div style={{ margin: '0.5rem 0', color: '#f44336', fontSize: '0.85rem' }}>
+                  <p style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>
+                    ⚠️ Backend niet bereikbaar
+                  </p>
+                  <p style={{ margin: '0.25rem 0', fontSize: '0.8rem' }}>
+                    • Controleer of de backend server draait
+                  </p>
+                  <p style={{ margin: '0.25rem 0', fontSize: '0.8rem' }}>
+                    • Check VITE_BACKEND_URL environment variable
+                  </p>
+                  <p style={{ margin: '0.25rem 0', fontSize: '0.8rem' }}>
+                    • Controleer CORS instellingen op de server
+                  </p>
+                  <p style={{ margin: '0.25rem 0', fontSize: '0.8rem' }}>
+                    • Open browser console (F12) voor details
+                  </p>
+                </div>
               )}
               <p style={{ margin: '0.5rem 0', color: '#666', fontSize: '0.9rem' }}>
                 <strong>User ID:</strong> {currentUserId.substring(0, 20)}...
