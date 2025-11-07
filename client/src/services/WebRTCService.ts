@@ -183,15 +183,19 @@ class WebRTCService {
       if (this.currentCall && this.currentCall.state !== 'failed') {
         this.updateCallState('ended');
       }
+      // Cleanup immediately - but DON'T disconnect socket!
+      // Socket should stay connected for future calls
       this.cleanup();
     });
     socketService.on('call:hangup', (_data: { fromUserId: string }) => {
       // Call was hung up after answer - normal end
       // Update state immediately for faster feedback
       if (this.currentCall && this.currentCall.state !== 'failed') {
+        console.log('📞 Call hangup received - ending call');
         this.updateCallState('ended');
       }
-      // Cleanup immediately
+      // Cleanup immediately - but DON'T disconnect socket!
+      // Socket should stay connected for future calls
       this.cleanup();
     });
     // Listen for socket errors (including permission denied)
@@ -1200,15 +1204,19 @@ class WebRTCService {
 
     if (this.currentCall.state !== 'ended') {
       const targetUserId = this.currentCall.targetUserId;
+      const currentState = this.currentCall.state; // Store state BEFORE updating
       
       // Update state immediately for faster UI feedback
       this.updateCallState('ended');
       
       // Send hangup signal (after answer) or cancel (before answer)
-      const isPreAnswer = this.currentCall.state === 'dialing' || this.currentCall.state === 'ringing';
+      // Check the ORIGINAL state, not the updated one
+      const isPreAnswer = currentState === 'dialing' || currentState === 'ringing';
       if (isPreAnswer) {
+        console.log('📞 Sending cancel signal (pre-answer)');
         socketService.sendCallCancel(targetUserId);
       } else {
+        console.log('📞 Sending hangup signal (post-answer)');
         socketService.sendCallHangup(targetUserId);
       }
       
@@ -1245,11 +1253,16 @@ class WebRTCService {
       this.peerConnection.onicecandidate = null;
       this.peerConnection.ontrack = null;
       this.peerConnection.onconnectionstatechange = null;
+      this.peerConnection.oniceconnectionstatechange = null;
       
       // Close the connection
-      this.peerConnection.close();
+      try {
+        this.peerConnection.close();
+        console.log('✅ Peer connection closed');
+      } catch (error) {
+        console.warn('⚠️ Error closing peer connection:', error);
+      }
       this.peerConnection = null;
-      console.log('✅ Peer connection closed');
     }
 
     // Clear call state - always set to 'ended' for normal cleanup
@@ -1275,6 +1288,10 @@ class WebRTCService {
       clearTimeout(this.connectionRecoveryTimeout);
       this.connectionRecoveryTimeout = null;
     }
+    
+    // IMPORTANT: Do NOT disconnect socket here!
+    // Socket should remain connected for future calls
+    console.log('✅ Cleanup complete - socket connection preserved');
   }
 
   private updateCallState(state: CallState): void {
