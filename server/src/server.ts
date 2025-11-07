@@ -311,11 +311,34 @@ io.on('connection', (socket: AuthenticatedSocket) => {
   });
 
   socket.on('call:ice-candidate', (data) => {
+    // Forward ICE candidate with detailed logging
+    const candidateString = data.candidate?.candidate || '';
+    const candidateType = candidateString.includes('typ relay') ? 'relay' : 
+                          candidateString.includes('typ srflx') ? 'srflx' :
+                          candidateString.includes('typ host') ? 'host' : 'unknown';
+    
+    console.log('🧊 ICE candidate received:', {
+      from: socket.userId,
+      to: data.targetUserId,
+      type: candidateType,
+      candidate: candidateString.substring(0, 50)
+    });
+    
+    const targetRoom = `user:${data.targetUserId}`;
+    const roomExists = io.sockets.adapter.rooms.has(targetRoom);
+    
+    if (!roomExists) {
+      console.warn(`⚠️  ICE candidate target room not found: ${targetRoom}`);
+      return;
+    }
+    
     // Forward ICE candidate
-    io.to(`user:${data.targetUserId}`).emit('call:ice-candidate', {
+    io.to(targetRoom).emit('call:ice-candidate', {
       ...data,
       fromUserId: socket.userId
     });
+    
+    console.log(`✅ ICE candidate forwarded to ${targetRoom} (type: ${candidateType})`);
   });
 
   socket.on('call:end', (data) => {

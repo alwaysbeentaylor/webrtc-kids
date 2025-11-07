@@ -39,7 +39,70 @@ class SocketService {
     this.serverUrl = serverUrl;
     this.tokenGetter = tokenGetter;
 
-    await this.establishConnection();
+    // Retry connection up to 3 times
+    let lastError: Error | null = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        console.log(`🔄 Socket connection attempt ${attempt}/3...`);
+        await this.establishConnection();
+        
+        // Wait for connection to be established (with timeout)
+        await new Promise<void>((resolve, reject) => {
+          if (!this.socket) {
+            reject(new Error('Socket not created'));
+            return;
+          }
+          
+          const timeout = setTimeout(() => {
+            reject(new Error(`Connection timeout after ${attempt === 1 ? 5 : 3} seconds`));
+          }, attempt === 1 ? 5000 : 3000);
+          
+          const onConnect = () => {
+            clearTimeout(timeout);
+            this.socket?.off('connect', onConnect);
+            this.socket?.off('connect_error', onError);
+            resolve();
+          };
+          
+          const onError = (error: Error) => {
+            clearTimeout(timeout);
+            this.socket?.off('connect', onConnect);
+            this.socket?.off('connect_error', onError);
+            reject(error);
+          };
+          
+          if (this.socket.connected) {
+            clearTimeout(timeout);
+            resolve();
+          } else {
+            this.socket.once('connect', onConnect);
+            this.socket.once('connect_error', onError);
+          }
+        });
+        
+        console.log(`✅ Socket connected successfully on attempt ${attempt}`);
+        return; // Success, exit retry loop
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        console.warn(`⚠️ Socket connection attempt ${attempt} failed:`, lastError.message);
+        
+        if (attempt < 3) {
+          // Wait before retry (exponential backoff)
+          const delay = attempt * 1000; // 1s, 2s
+          console.log(`⏳ Waiting ${delay}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          
+          // Cleanup failed socket before retry
+          if (this.socket) {
+            this.socket.disconnect();
+            this.socket = null;
+          }
+        }
+      }
+    }
+    
+    // All retries failed
+    throw new Error(`Socket connection failed after 3 attempts: ${lastError?.message || 'Unknown error'}`);
   }
 
   private async establishConnection(): Promise<void> {
@@ -168,14 +231,29 @@ class SocketService {
     this.socket?.emit(event, payload);
   }
 
-  // Join user room for targeted messaging
-  joinUserRoom(): void {
+  // Join user room for targeted messaging - returns promise that resolves when ACK received
+  async joinUserRoom(): Promise<void> {
     if (!this.socket?.connected) {
-      console.warn('⚠️⚠️⚠️ Cannot join user room - socket not connected');
-      return;
+      throw new Error('Cannot join user room - socket not connected');
     }
-    console.log('🏠🏠🏠 Joining user room...');
-    this.socket.emit('join:user-room');
+    
+    return new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.socket?.off('room:joined', onRoomJoined);
+        reject(new Error('Room join timeout - no ACK received'));
+      }, 5000); // 5 second timeout
+      
+      const onRoomJoined = (data: { room: string; userId: string }) => {
+        clearTimeout(timeout);
+        this.socket?.off('room:joined', onRoomJoined);
+        console.log('✅✅✅ Room join ACK received:', data);
+        resolve();
+      };
+      
+      console.log('🏠🏠🏠 Joining user room...');
+      this.socket.once('room:joined', onRoomJoined);
+      this.socket.emit('join:user-room');
+    });
   }
 
   // WebRTC signaling methods

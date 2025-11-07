@@ -599,22 +599,36 @@ export function CallScreen({ targetUserId, targetUserName, isParent, remoteRole,
         </div>
       )}
 
-              {/* Debug info */}
+              {/* Debug info overlay */}
               {import.meta.env.DEV && (
         <div style={{
           position: 'absolute',
           top: '20px',
           left: '20px',
-          backgroundColor: 'rgba(0,0,0,0.7)',
-          color: 'white',
-          padding: '0.5rem',
-          borderRadius: '4px',
-          fontSize: '12px',
+          backgroundColor: 'rgba(0,0,0,0.85)',
+          color: '#0f0',
+          padding: '0.75rem',
+          borderRadius: '6px',
+          fontSize: '11px',
           fontFamily: 'monospace',
-          zIndex: 1005
+          zIndex: 1005,
+          maxWidth: '300px',
+          lineHeight: '1.4',
+          border: '1px solid #0f0'
         }}>
-          State: {callState}<br />
-          Target: {targetUserId}
+          <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', color: '#fff' }}>🔧 WebRTC Debug</div>
+          <div>Call State: <span style={{ color: callState === 'active' ? '#0f0' : callState === 'failed' ? '#f00' : '#ff0' }}>{callState}</span></div>
+          <div>ICE State: <span style={{ color: webrtcService.getDebugInfo().iceConnectionState === 'connected' || webrtcService.getDebugInfo().iceConnectionState === 'completed' ? '#0f0' : webrtcService.getDebugInfo().iceConnectionState === 'failed' ? '#f00' : '#ff0' }}>{webrtcService.getDebugInfo().iceConnectionState || 'N/A'}</span></div>
+          <div>Connection: <span style={{ color: webrtcService.getDebugInfo().connectionState === 'connected' ? '#0f0' : webrtcService.getDebugInfo().connectionState === 'failed' ? '#f00' : '#ff0' }}>{webrtcService.getDebugInfo().connectionState || 'N/A'}</span></div>
+          <div>Last Candidate: <span style={{ color: webrtcService.getDebugInfo().lastCandidateType === 'relay' ? '#0f0' : '#ff0' }}>{webrtcService.getDebugInfo().lastCandidateType || 'none'}</span></div>
+          <div>Pending Candidates: {webrtcService.getDebugInfo().pendingCandidates}</div>
+          <div>Local SDP: {webrtcService.getDebugInfo().hasLocalDescription ? '✅' : '❌'}</div>
+          <div>Remote SDP: {webrtcService.getDebugInfo().hasRemoteDescription ? '✅' : '❌'}</div>
+          {webrtcService.getDebugInfo().iceStateHistory.length > 0 && (
+            <div style={{ marginTop: '0.5rem', fontSize: '10px', opacity: 0.8 }}>
+              History: {webrtcService.getDebugInfo().iceStateHistory.slice(-3).join(' → ')}
+            </div>
+          )}
         </div>
       )}
 

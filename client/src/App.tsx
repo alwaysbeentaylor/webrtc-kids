@@ -353,17 +353,23 @@ function App() {
           });
           
           // CRITICAL: Set up event handlers BEFORE connecting
-          const handleConnect = () => {
+          const handleConnect = async () => {
             console.log('✅✅✅ Socket connected for user:', userId);
             setSocketConnected(true);
             
-            // Join user room immediately
-            socketService.joinUserRoom();
-            console.log('📢 Joined user room for:', userId);
-            
-            // CRITICAL: Initialize WebRTC listeners AFTER socket is connected
-            webrtcService.initializeListeners();
-            console.log('✅ WebRTC listeners initialized');
+            try {
+              // Join user room and wait for ACK before initializing WebRTC
+              await socketService.joinUserRoom();
+              console.log('📢 Joined user room for:', userId);
+              
+              // CRITICAL: Initialize WebRTC listeners AFTER room join ACK
+              webrtcService.initializeListeners();
+              console.log('✅ WebRTC listeners initialized');
+            } catch (error) {
+              console.error('❌ Failed to join room or initialize WebRTC:', error);
+              // Still try to initialize WebRTC listeners even if room join fails
+              webrtcService.initializeListeners();
+            }
             
             if (userId) {
               // Small delay to ensure room is joined before updating status
@@ -373,9 +379,9 @@ function App() {
             }
           };
           
-          // Listen for room join confirmation
+          // Listen for room join confirmation (for logging/debugging)
           const handleRoomJoined = (data: { room: string; userId: string }) => {
-            console.log('✅✅✅ Room joined confirmed:', data);
+            console.log('✅✅✅ Room joined event received:', data);
             console.log('✅✅✅ Current userId:', currentUserId);
             console.log('✅✅✅ Expected room:', `user:${currentUserId}`);
             if (data.room !== `user:${currentUserId}`) {
