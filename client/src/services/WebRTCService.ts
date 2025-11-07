@@ -214,6 +214,16 @@ class WebRTCService {
   async acceptCall(localRole?: UserRole, remoteRole?: UserRole): Promise<void> {
     if (!this.pendingOffer) {
       console.warn('No pending offer to accept');
+      // Check if call is already being processed
+      if (this.currentCall && this.currentCall.direction === 'incoming' && this.currentCall.state === 'ringing') {
+        console.log('⚠️  Call already in ringing state, checking if peer connection exists');
+        if (this.peerConnection && this.peerConnection.localDescription) {
+          console.log('✅ Peer connection already has local description, call should be active');
+          // Call is already being processed, just update roles
+          this.setCallRoles(localRole || 'child', remoteRole || 'child');
+          return;
+        }
+      }
       return;
     }
     const { fromUserId, offer } = this.pendingOffer;
@@ -223,6 +233,7 @@ class WebRTCService {
     } catch (e) {
       console.error('Error accepting call:', e);
       this.updateCallState('failed');
+      throw e; // Re-throw so UI can handle it
     }
   }
 
@@ -496,15 +507,25 @@ class WebRTCService {
         }
       };
 
-      // Handle remote stream
+      // Handle remote stream - CRITICAL: This fires when remote media arrives
       this.peerConnection.ontrack = (event) => {
-        console.log('📹 Remote stream received');
-        this.remoteStream = event.streams[0];
-        if (this.currentCall) {
-          this.currentCall.remoteStream = event.streams[0];
+        console.log('📹📹📹 REMOTE STREAM RECEIVED in startCall!', {
+          streams: event.streams.length,
+          tracks: event.streams[0]?.getTracks().map(t => ({ kind: t.kind, id: t.id, enabled: t.enabled })),
+          streamId: event.streams[0]?.id
+        });
+        
+        if (event.streams && event.streams.length > 0) {
+          this.remoteStream = event.streams[0];
+          if (this.currentCall) {
+            this.currentCall.remoteStream = event.streams[0];
+          }
+          // Transition to active when remote stream is received (call is answered)
+          console.log('✅✅✅ Updating call state to ACTIVE - remote stream received!');
+          this.updateCallState('active');
+        } else {
+          console.warn('⚠️  ontrack event but no streams in event');
         }
-        // Transition to active when remote stream is received (call is answered)
-        this.updateCallState('active');
       };
 
       // Handle connection state changes
@@ -715,15 +736,25 @@ class WebRTCService {
         }
       };
 
-      // Handle remote stream
+      // Handle remote stream - CRITICAL: This fires when remote media arrives
       this.peerConnection.ontrack = (event) => {
-        console.log('📹 Remote stream received');
-        this.remoteStream = event.streams[0];
-        if (this.currentCall) {
-          this.currentCall.remoteStream = event.streams[0];
+        console.log('📹📹📹 REMOTE STREAM RECEIVED in handleIncomingOffer!', {
+          streams: event.streams.length,
+          tracks: event.streams[0]?.getTracks().map(t => ({ kind: t.kind, id: t.id, enabled: t.enabled })),
+          streamId: event.streams[0]?.id
+        });
+        
+        if (event.streams && event.streams.length > 0) {
+          this.remoteStream = event.streams[0];
+          if (this.currentCall) {
+            this.currentCall.remoteStream = event.streams[0];
+          }
+          // Transition to active when remote stream is received (call is answered)
+          console.log('✅✅✅ Updating call state to ACTIVE - remote stream received!');
+          this.updateCallState('active');
+        } else {
+          console.warn('⚠️  ontrack event but no streams in event');
         }
-        // Transition to active when remote stream is received (call is answered)
-        this.updateCallState('active');
       };
 
       // Handle connection state changes
@@ -749,46 +780,60 @@ class WebRTCService {
         }
       };
 
-      // Set remote description
+      // Set remote description FIRST (this is critical for WebRTC)
       if (this.peerConnection.remoteDescription) {
         console.warn('⚠️  Remote description already set, skipping setRemoteDescription');
       } else {
         await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+        console.log('✅✅✅ Remote description set for incoming call');
       }
 
-      // Create answer
-      const answer = await this.peerConnection.createAnswer();
+      // Create answer AFTER setting remote description
+      const answer = await this.peerConnection.createAnswer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true
+      });
       
       // Check if local description is already set before setting it
       if (this.peerConnection.localDescription) {
         console.warn('⚠️  Local description already set, skipping setLocalDescription');
       } else {
         await this.peerConnection.setLocalDescription(answer);
+        console.log('✅✅✅ Local description set for incoming call');
       }
 
-      // Create call info with roles
-      this.currentCall = {
-        callId: `call-${Date.now()}`,
-        targetUserId: fromUserId,
-        state: 'ringing',
-        direction: 'incoming',
-        localRole,
-        remoteRole,
-        localStream: stream.getTracks().length > 0 ? stream : undefined
-      };
+      // Update call info with roles and stream
+      if (!this.currentCall) {
+        this.currentCall = {
+          callId: `call-${Date.now()}`,
+          targetUserId: fromUserId,
+          state: 'ringing',
+          direction: 'incoming',
+          localRole,
+          remoteRole,
+          localStream: stream.getTracks().length > 0 ? stream : undefined
+        };
+      } else {
+        // Update existing call with roles and stream
+        this.currentCall.localRole = localRole;
+        this.currentCall.remoteRole = remoteRole;
+        this.currentCall.localStream = stream.getTracks().length > 0 ? stream : undefined;
+      }
+      
       this.notifyCallStateChange('ringing');
       this.notifyPermissionsChange();
 
-      // Send answer through signaling server (auto-accept)
+      // Send answer through signaling server (this accepts the call)
       socketService.sendAnswer(fromUserId, answer);
+      console.log('✅✅✅ Answer sent to caller:', fromUserId);
       
       // Emit answered signal after sending answer
       socketService.emit('call:answered', { fromUserId, targetUserId: fromUserId });
       
-      // Don't auto-update to connected - let ontrack handle it
+      // Don't auto-update to active - let ontrack handle it when remote stream arrives
       // This prevents race conditions
 
-      console.log('✅✅✅ Call answered automatically from:', fromUserId);
+      console.log('✅✅✅ Call accepted and answer sent from:', fromUserId);
     } catch (error) {
       console.error('❌❌❌ Error handling incoming offer:', error);
       // Don't cleanup immediately - let the user see the error
