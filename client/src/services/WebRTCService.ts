@@ -32,9 +32,12 @@ class WebRTCService {
   private callTimeout: ReturnType<typeof setTimeout> | null = null;
   private pendingOffer: { fromUserId: string; offer: RTCSessionDescriptionInit } | null = null;
   private pendingRemoteCandidates: RTCIceCandidateInit[] = [];
-  private iceRestartAttempted: boolean = false;
+  private iceRestartCount: number = 0;
+  private maxIceRestarts: number = 2; // Allow up to 2 ICE restarts
   private lastIceCandidateType: string | null = null;
   private iceConnectionStateHistory: string[] = [];
+  private iceGatheringTimeout: ReturnType<typeof setTimeout> | null = null;
+  private connectionRecoveryTimeout: ReturnType<typeof setTimeout> | null = null;
 
   // STUN/TURN servers - TURN servers zijn essentieel voor Android NAT traversal
   // Android heeft vaak restrictievere NAT/firewall settings dan iOS
@@ -50,8 +53,9 @@ class WebRTCService {
       { urls: 'stun:stun.stunprotocol.org:3478' },
       { urls: 'stun:stun.voiparound.com' },
       { urls: 'stun:stun.voipbuster.com' },
-      // Free TURN servers - Focus on reliable 443 ports (TCP + UDP)
-      // These are most likely to work through firewalls
+      // Free TURN servers - Multiple options for maximum reliability
+      // Focus on 443 ports (TCP + UDP) for firewall compatibility
+      // Also include UDP 80 for broader compatibility
       { 
         urls: 'turn:openrelay.metered.ca:443',
         username: 'openrelayproject',
@@ -69,6 +73,17 @@ class WebRTCService {
       },
       {
         urls: 'turn:relay.metered.ca:443?transport=tcp',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      // Additional UDP options for better compatibility
+      {
+        urls: 'turn:openrelay.metered.ca:80',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      {
+        urls: 'turn:relay.metered.ca:80',
         username: 'openrelayproject',
         credential: 'openrelayproject'
       }
@@ -497,65 +512,49 @@ class WebRTCService {
               clearTimeout(this.callTimeout);
               this.callTimeout = null;
             }
-            // Reset restart flag on successful connection
-            this.iceRestartAttempted = false;
+            // Reset restart count on successful connection
+            this.iceRestartCount = 0;
           } else if (state === 'failed') {
             console.error('❌ ICE connection failed', isAndroid ? '(Android)' : '');
             console.error('💡 Last candidate type:', this.lastIceCandidateType);
             console.error('💡 Connection state history:', this.iceConnectionStateHistory);
             
-            // Try ICE restart ONCE if not already attempted
-            if (!this.iceRestartAttempted && this.currentCall && this.peerConnection) {
-              this.iceRestartAttempted = true;
-              console.log('🔄 Attempting ICE restart...');
-              
-              // Wrap async code in IIFE
-              (async () => {
-                try {
-                  // Create new offer with iceRestart flag
-                  const restartOffer = await this.peerConnection!.createOffer({ iceRestart: true });
-                  await this.peerConnection!.setLocalDescription(restartOffer);
-                  
-                  // Send restart offer to peer
-                  if (this.currentCall!.direction === 'outgoing') {
-                    socketService.sendOffer(this.currentCall!.targetUserId, restartOffer);
-                  } else {
-                    // For incoming calls, we need to send answer with restart
-                    const restartAnswer = await this.peerConnection!.createAnswer({ iceRestart: true });
-                    await this.peerConnection!.setLocalDescription(restartAnswer);
-                    socketService.sendAnswer(this.currentCall!.targetUserId, restartAnswer);
-                  }
-                  
-                  console.log('✅ ICE restart offer/answer sent');
-                } catch (restartError) {
-                  console.error('❌ ICE restart failed:', restartError);
-                }
-              })();
-              
-              // Give it time to recover after restart
-              setTimeout(() => {
-                if (this.peerConnection && this.peerConnection.iceConnectionState === 'failed') {
-                  console.error('❌ ICE connection still failed after restart');
-                  this.updateCallState('failed');
-                }
-              }, 8000);
+            // Try ICE restart with retry mechanism
+            if (this.iceRestartCount < this.maxIceRestarts && this.currentCall && this.peerConnection) {
+              this.attemptIceRestart('outgoing');
             } else {
-              // Already attempted restart or can't restart
+              // All retries exhausted - wait longer before giving up (mobile networks need more time)
               setTimeout(() => {
                 if (this.peerConnection && this.peerConnection.iceConnectionState === 'failed') {
-                  console.error('❌ ICE connection failed - giving up');
-                  this.updateCallState('failed');
+                  console.error('❌ ICE connection failed after all retries');
+                  // One final attempt if we haven't exceeded max restarts
+                  if (this.iceRestartCount < this.maxIceRestarts) {
+                    console.log('🔄 Final retry attempt...');
+                    this.attemptIceRestart('outgoing');
+                  } else {
+                    this.updateCallState('failed');
+                  }
                 }
-              }, 3000);
+              }, 15000); // Longer timeout for mobile networks
             }
           } else if (state === 'disconnected') {
             console.warn('⚠️ ICE connection disconnected', isAndroid ? '(Android - may reconnect)' : '');
-            // Give it more time to reconnect on Android
-            const timeout = isAndroid ? 15000 : 10000;
-            setTimeout(() => {
+            // Give it more time to reconnect - mobile networks need longer
+            const timeout = isAndroid ? 20000 : 15000; // Increased timeouts
+            // Clear any existing recovery timeout
+            if (this.connectionRecoveryTimeout) {
+              clearTimeout(this.connectionRecoveryTimeout);
+            }
+            this.connectionRecoveryTimeout = setTimeout(() => {
               if (this.peerConnection && this.peerConnection.iceConnectionState === 'disconnected') {
-                console.error('❌ ICE connection failed to reconnect', isAndroid ? '(Android)' : '');
-                this.updateCallState('failed');
+                console.warn('⚠️ Still disconnected after timeout, attempting recovery...');
+                // Try ICE restart if we haven't exceeded max attempts
+                if (this.iceRestartCount < this.maxIceRestarts) {
+                  this.attemptIceRestart('outgoing');
+                } else {
+                  console.error('❌ ICE connection failed to reconnect after all retries');
+                  this.updateCallState('failed');
+                }
               }
             }, timeout);
           } else if (state === 'checking') {
@@ -636,13 +635,20 @@ class WebRTCService {
 
       console.log('📞 Call started to:', targetUserId);
 
-      // Set timeout for call - if no answer in 60 seconds, fail (increased from 30s)
+      // Set timeout for call - longer timeout for mobile networks (90 seconds)
+      // Mobile networks can be slower, especially when switching between WiFi/4G
       this.callTimeout = setTimeout(() => {
         if (this.currentCall && (this.currentCall.state === 'dialing' || this.currentCall.state === 'ringing')) {
-          console.warn('⏱️ Call timeout - no answer received after 60 seconds');
-          this.updateCallState('failed');
+          console.warn('⏱️ Call timeout - no answer received after 90 seconds');
+          // Don't immediately fail - try one more time if we haven't tried restarting
+          if (this.iceRestartCount < this.maxIceRestarts && this.peerConnection) {
+            console.log('🔄 Attempting final ICE restart before giving up...');
+            this.attemptIceRestart('outgoing');
+          } else {
+            this.updateCallState('failed');
+          }
         }
-      }, 60000); // Increased to 60 seconds
+      }, 90000); // 90 seconds for mobile networks
     } catch (error) {
       console.error('Error starting call:', error);
       this.cleanup();
@@ -775,54 +781,48 @@ class WebRTCService {
           if (state === 'connected' || state === 'completed') {
             console.log('✅✅✅ ICE connection established (incoming)!', isAndroid ? '(Android)' : '');
             console.log('✅ Connection type:', this.lastIceCandidateType === 'relay' ? 'TURN/RELAY (via server)' : this.lastIceCandidateType === 'srflx' ? 'STUN (NAT mapped)' : 'Direct (host)');
-            // Reset restart flag on successful connection
-            this.iceRestartAttempted = false;
+            // Reset restart count on successful connection
+            this.iceRestartCount = 0;
           } else if (state === 'failed') {
             console.error('❌ ICE connection failed (incoming)', isAndroid ? '(Android)' : '');
             console.error('💡 Last candidate type:', this.lastIceCandidateType);
             console.error('💡 Connection state history:', this.iceConnectionStateHistory);
             
-            // Try ICE restart ONCE if not already attempted
-            if (!this.iceRestartAttempted && this.currentCall && this.peerConnection) {
-              this.iceRestartAttempted = true;
-              console.log('🔄 Attempting ICE restart (incoming)...');
-              
-              // Wrap async code in IIFE
-              (async () => {
-                try {
-                  // For incoming calls, create answer with iceRestart
-                  const restartAnswer = await this.peerConnection!.createAnswer({ iceRestart: true });
-                  await this.peerConnection!.setLocalDescription(restartAnswer);
-                  socketService.sendAnswer(fromUserId, restartAnswer);
-                  console.log('✅ ICE restart answer sent');
-                } catch (restartError) {
-                  console.error('❌ ICE restart failed (incoming):', restartError);
-                }
-              })();
-              
-              // Give it time to recover after restart
-              setTimeout(() => {
-                if (this.peerConnection && this.peerConnection.iceConnectionState === 'failed') {
-                  console.error('❌ ICE connection still failed after restart (incoming)');
-                  this.updateCallState('failed');
-                }
-              }, 8000);
+            // Try ICE restart with retry mechanism
+            if (this.iceRestartCount < this.maxIceRestarts && this.currentCall && this.peerConnection) {
+              this.attemptIceRestart('incoming', fromUserId);
             } else {
-              // Already attempted restart
+              // All retries exhausted - wait longer before giving up
               setTimeout(() => {
                 if (this.peerConnection && this.peerConnection.iceConnectionState === 'failed') {
-                  console.error('❌ ICE connection failed (incoming) - giving up');
-                  this.updateCallState('failed');
+                  console.error('❌ ICE connection failed after all retries (incoming)');
+                  // One final attempt if we haven't exceeded max restarts
+                  if (this.iceRestartCount < this.maxIceRestarts) {
+                    console.log('🔄 Final retry attempt (incoming)...');
+                    this.attemptIceRestart('incoming', fromUserId);
+                  } else {
+                    this.updateCallState('failed');
+                  }
                 }
-              }, 3000);
+              }, 15000); // Longer timeout for mobile networks
             }
           } else if (state === 'disconnected') {
             console.warn('⚠️ ICE connection disconnected (incoming)', isAndroid ? '(Android - may reconnect)' : '');
-            const timeout = isAndroid ? 15000 : 10000;
-            setTimeout(() => {
+            const timeout = isAndroid ? 20000 : 15000; // Increased timeouts
+            // Clear any existing recovery timeout
+            if (this.connectionRecoveryTimeout) {
+              clearTimeout(this.connectionRecoveryTimeout);
+            }
+            this.connectionRecoveryTimeout = setTimeout(() => {
               if (this.peerConnection && this.peerConnection.iceConnectionState === 'disconnected') {
-                console.error('❌ ICE connection failed to reconnect (incoming)', isAndroid ? '(Android)' : '');
-                this.updateCallState('failed');
+                console.warn('⚠️ Still disconnected after timeout (incoming), attempting recovery...');
+                // Try ICE restart if we haven't exceeded max attempts
+                if (this.iceRestartCount < this.maxIceRestarts) {
+                  this.attemptIceRestart('incoming', fromUserId);
+                } else {
+                  console.error('❌ ICE connection failed to reconnect after all retries (incoming)');
+                  this.updateCallState('failed');
+                }
               }
             }, timeout);
           } else if (state === 'checking') {
@@ -1000,6 +1000,47 @@ class WebRTCService {
       } else {
         this.updateCallState('failed');
       }
+    }
+  }
+
+  // Attempt ICE restart with retry mechanism
+  private async attemptIceRestart(direction: 'outgoing' | 'incoming', fromUserId?: string): Promise<void> {
+    if (!this.peerConnection || !this.currentCall) {
+      console.warn('⚠️ Cannot restart ICE - no peer connection or call');
+      return;
+    }
+
+    if (this.iceRestartCount >= this.maxIceRestarts) {
+      console.warn('⚠️ Max ICE restarts reached, cannot retry');
+      return;
+    }
+
+    this.iceRestartCount++;
+    console.log(`🔄 Attempting ICE restart #${this.iceRestartCount}/${this.maxIceRestarts} (${direction})...`);
+
+    try {
+      if (direction === 'outgoing') {
+        // Create new offer with iceRestart flag
+        const restartOffer = await this.peerConnection.createOffer({ iceRestart: true });
+        await this.peerConnection.setLocalDescription(restartOffer);
+        socketService.sendOffer(this.currentCall.targetUserId, restartOffer);
+        console.log('✅ ICE restart offer sent');
+      } else {
+        // For incoming calls, create answer with iceRestart
+        if (!fromUserId) {
+          fromUserId = this.currentCall.targetUserId;
+        }
+        const restartAnswer = await this.peerConnection.createAnswer({ iceRestart: true });
+        await this.peerConnection.setLocalDescription(restartAnswer);
+        socketService.sendAnswer(fromUserId, restartAnswer);
+        console.log('✅ ICE restart answer sent');
+      }
+
+      // Restart attempt completed (count already incremented)
+    } catch (restartError) {
+      console.error('❌ ICE restart failed:', restartError);
+      // Don't increment count on error - allow retry
+      this.iceRestartCount--;
     }
   }
 
@@ -1209,9 +1250,19 @@ class WebRTCService {
     
     // Reset state tracking
     this.pendingRemoteCandidates = [];
-    this.iceRestartAttempted = false;
+    this.iceRestartCount = 0;
     this.lastIceCandidateType = null;
     this.iceConnectionStateHistory = [];
+    
+    // Clear timeouts
+    if (this.iceGatheringTimeout) {
+      clearTimeout(this.iceGatheringTimeout);
+      this.iceGatheringTimeout = null;
+    }
+    if (this.connectionRecoveryTimeout) {
+      clearTimeout(this.connectionRecoveryTimeout);
+      this.connectionRecoveryTimeout = null;
+    }
   }
 
   private updateCallState(state: CallState): void {
