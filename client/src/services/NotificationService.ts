@@ -2,6 +2,7 @@
 class NotificationService {
   private static instance: NotificationService | null = null;
   private registration: ServiceWorkerRegistration | null = null;
+  private serviceWorkerReady: boolean = false;
 
   private constructor() {}
 
@@ -32,17 +33,25 @@ class NotificationService {
 
       // Wait for service worker to be ready
       await navigator.serviceWorker.ready;
+      this.serviceWorkerReady = true;
       console.log('✅ Service Worker ready');
 
-      // Request notification permission
-      const permission = await Notification.requestPermission();
-      console.log('📱 Notification permission:', permission);
-
-      if (permission === 'granted') {
-        // Subscribe to push notifications
-        await this.subscribeToPush();
+      // Request notification permission (only if not already requested)
+      if (Notification.permission === 'default') {
+        const permission = await Notification.requestPermission();
+        console.log('📱 Notification permission:', permission);
+        
+        if (permission === 'granted') {
+          // Subscribe to push notifications (for future server-side push)
+          await this.subscribeToPush();
+        } else {
+          console.warn('⚠️ Notification permission denied');
+        }
       } else {
-        console.warn('⚠️ Notification permission denied');
+        console.log('📱 Notification permission already:', Notification.permission);
+        if (Notification.permission === 'granted') {
+          await this.subscribeToPush();
+        }
       }
     } catch (error) {
       console.error('❌ Error initializing notifications:', error);
@@ -79,13 +88,35 @@ class NotificationService {
 
     const permission = Notification.permission;
     if (permission !== 'granted') {
-      console.warn('Notification permission not granted');
-      return;
+      console.warn('⚠️ Notification permission not granted:', permission);
+      // Try to request permission if not yet requested
+      if (permission === 'default') {
+        const newPermission = await this.requestPermission();
+        if (newPermission !== 'granted') {
+          console.warn('⚠️ User denied notification permission');
+          return;
+        }
+      } else {
+        console.warn('⚠️ Notification permission denied by user');
+        return;
+      }
     }
 
     try {
-      // Try to use service worker notification first (works when app is closed)
-      if (this.registration) {
+      // Try to use service worker notification first (works when app is closed/background)
+      if (this.registration && this.serviceWorkerReady) {
+        // Send message to service worker to show notification
+        // This works even when app is in background
+        if (navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: 'SHOW_NOTIFICATION',
+            title,
+            options
+          });
+          console.log('📤 Message sent to service worker for notification');
+        }
+        
+        // Also try direct service worker notification
         await this.registration.showNotification(title, {
           ...options,
           requireInteraction: true
@@ -93,11 +124,23 @@ class NotificationService {
         console.log('✅ Notification shown via service worker');
       } else {
         // Fallback to regular notification (only works when app is open)
-        new Notification(title, options);
+        const notification = new Notification(title, options);
         console.log('✅ Notification shown directly');
+        
+        // Auto-close after 5 seconds if not clicked
+        setTimeout(() => {
+          notification.close();
+        }, 5000);
       }
     } catch (error) {
       console.error('❌ Error showing notification:', error);
+      // Fallback to regular notification
+      try {
+        const notification = new Notification(title, options);
+        setTimeout(() => notification.close(), 5000);
+      } catch (fallbackError) {
+        console.error('❌ Fallback notification also failed:', fallbackError);
+      }
     }
   }
 
@@ -113,6 +156,10 @@ class NotificationService {
       return 'denied';
     }
     return Notification.permission;
+  }
+
+  isReady(): boolean {
+    return this.serviceWorkerReady && Notification.permission === 'granted';
   }
 }
 

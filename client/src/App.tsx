@@ -531,16 +531,21 @@ function App() {
               playIncomingCallSound();
               
               // Show push notification (works even when app is closed/background)
-              notificationService.showNotification('Nieuwe oproep', {
-                body: 'Je hebt een oproep ontvangen',
-                icon: '/icon-192.png',
-                tag: `call-${data.fromUserId}`,
-                data: {
-                  fromUserId: data.fromUserId
-                }
-              }).catch(err => {
-                console.error('Failed to show notification:', err);
-              });
+              // Check if notification service is ready
+              if (notificationService.isReady()) {
+                notificationService.showNotification('Nieuwe oproep', {
+                  body: 'Je hebt een oproep ontvangen',
+                  icon: '/icon-192.png',
+                  tag: `call-${data.fromUserId}`,
+                  data: {
+                    fromUserId: data.fromUserId
+                  }
+                }).catch(err => {
+                  console.error('Failed to show notification:', err);
+                });
+              } else {
+                console.warn('⚠️ Notification service not ready, permission:', notificationService.getPermission());
+              }
 
               // Get caller name and role from family service
               let callerName = data.fromUserId;
