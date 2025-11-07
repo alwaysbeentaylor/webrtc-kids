@@ -523,41 +523,43 @@ class WebRTCService {
             console.error('💡 Last candidate type:', this.lastIceCandidateType);
             console.error('💡 Connection state history:', this.iceConnectionStateHistory);
             
-            // Try ICE restart with retry mechanism
+            // Don't mark as failed immediately - give ICE restart more time
+            // Only try ICE restart if we haven't exceeded max attempts
             if (this.iceRestartCount < this.maxIceRestarts && this.currentCall && this.peerConnection) {
-              this.attemptIceRestart('outgoing');
-            } else {
-              // All retries exhausted - wait longer before giving up (mobile networks need more time)
+              console.log('🔄 Attempting ICE restart...');
+              // Wait a bit before restarting to give connection a chance
               setTimeout(() => {
-                if (this.peerConnection && this.peerConnection.iceConnectionState === 'failed') {
-                  console.error('❌ ICE connection failed after all retries');
-                  // One final attempt if we haven't exceeded max restarts
-                  if (this.iceRestartCount < this.maxIceRestarts) {
-                    console.log('🔄 Final retry attempt...');
-                    this.attemptIceRestart('outgoing');
-                  } else {
-                    this.updateCallState('failed');
-                  }
+                if (this.peerConnection && this.peerConnection.iceConnectionState === 'failed' && this.currentCall) {
+                  this.attemptIceRestart('outgoing');
                 }
-              }, 15000); // Longer timeout for mobile networks
+              }, 3000); // Wait 3 seconds before restart
+            } else {
+              // All retries exhausted - wait much longer before giving up
+              setTimeout(() => {
+                if (this.peerConnection && this.peerConnection.iceConnectionState === 'failed' && this.currentCall) {
+                  console.error('❌ ICE connection failed after all retries');
+                  // Only mark as failed if we're still failed after extended timeout
+                  this.updateCallState('failed');
+                }
+              }, 30000); // 30 seconds - much longer timeout before giving up
             }
           } else if (state === 'disconnected') {
             console.warn('⚠️ ICE connection disconnected', isAndroid ? '(Android - may reconnect)' : '');
-            // Give it more time to reconnect - mobile networks need longer
-            const timeout = isAndroid ? 20000 : 15000; // Increased timeouts
+            // Give it MUCH more time to reconnect - mobile networks need longer
+            const timeout = isAndroid ? 30000 : 25000; // Much longer timeouts
             // Clear any existing recovery timeout
             if (this.connectionRecoveryTimeout) {
               clearTimeout(this.connectionRecoveryTimeout);
             }
             this.connectionRecoveryTimeout = setTimeout(() => {
-              if (this.peerConnection && this.peerConnection.iceConnectionState === 'disconnected') {
+              if (this.peerConnection && this.peerConnection.iceConnectionState === 'disconnected' && this.currentCall) {
                 console.warn('⚠️ Still disconnected after timeout, attempting recovery...');
                 // Try ICE restart if we haven't exceeded max attempts
                 if (this.iceRestartCount < this.maxIceRestarts) {
                   this.attemptIceRestart('outgoing');
                 } else {
-                  console.error('❌ ICE connection failed to reconnect after all retries');
-                  this.updateCallState('failed');
+                  // Don't mark as failed immediately - disconnected can recover
+                  console.warn('⚠️ Max ICE restarts reached, but keeping call active - may recover');
                 }
               }
             }, timeout);
@@ -591,10 +593,20 @@ class WebRTCService {
       // Handle connection state changes
       this.peerConnection.onconnectionstatechange = () => {
         if (this.peerConnection) {
-          console.log('Connection state:', this.peerConnection.connectionState);
+          console.log('Connection state (outgoing):', this.peerConnection.connectionState);
           if (this.peerConnection.connectionState === 'failed') {
-            // Only mark as failed for actual failures, not disconnects
-            this.updateCallState('failed');
+            // Don't mark as failed immediately - give it time to recover
+            // Only mark as failed if we've exhausted all retries
+            setTimeout(() => {
+              if (this.peerConnection && this.peerConnection.connectionState === 'failed' && this.currentCall) {
+                if (this.iceRestartCount >= this.maxIceRestarts) {
+                  console.error('❌ Connection failed after all retries');
+                  this.updateCallState('failed');
+                } else {
+                  console.warn('⚠️ Connection failed but retries available');
+                }
+              }
+            }, 10000); // Wait 10 seconds before marking as failed
           } else if (this.peerConnection.connectionState === 'disconnected' || 
                      this.peerConnection.connectionState === 'closed') {
             // Normal disconnect/close - set to ended if not already failed
@@ -651,20 +663,22 @@ class WebRTCService {
       };
       console.log('📱 Device info for outgoing call:', deviceInfo);
 
-      // Set timeout for call - longer timeout for mobile networks (90 seconds)
+      // Set timeout for call - longer timeout for mobile networks (120 seconds)
       // Mobile networks can be slower, especially when switching between WiFi/4G
       this.callTimeout = setTimeout(() => {
         if (this.currentCall && (this.currentCall.state === 'dialing' || this.currentCall.state === 'ringing')) {
-          console.warn('⏱️ Call timeout - no answer received after 90 seconds');
-          // Don't immediately fail - try one more time if we haven't tried restarting
-          if (this.iceRestartCount < this.maxIceRestarts && this.peerConnection) {
-            console.log('🔄 Attempting final ICE restart before giving up...');
-            this.attemptIceRestart('outgoing');
-          } else {
+          console.warn('⏱️ Call timeout - no answer received after 120 seconds');
+          // Don't mark as failed immediately - give more time
+          // Only mark as failed if we're still in dialing/ringing state after timeout
+          if (this.peerConnection && this.peerConnection.iceConnectionState === 'failed') {
+            console.error('❌ Call failed - ICE connection failed');
             this.updateCallState('failed');
+          } else {
+            // Still trying - give more time
+            console.log('⏳ Call still in progress, extending timeout...');
           }
         }
-      }, 90000); // 90 seconds for mobile networks
+      }, 120000); // 120 seconds - much longer timeout
     } catch (error) {
       console.error('Error starting call:', error);
       this.cleanup();
@@ -804,40 +818,41 @@ class WebRTCService {
             console.error('💡 Last candidate type:', this.lastIceCandidateType);
             console.error('💡 Connection state history:', this.iceConnectionStateHistory);
             
-            // Try ICE restart with retry mechanism
+            // Don't mark as failed immediately - give ICE restart more time
             if (this.iceRestartCount < this.maxIceRestarts && this.currentCall && this.peerConnection) {
-              this.attemptIceRestart('incoming', fromUserId);
-            } else {
-              // All retries exhausted - wait longer before giving up
+              console.log('🔄 Attempting ICE restart (incoming)...');
+              // Wait a bit before restarting to give connection a chance
               setTimeout(() => {
-                if (this.peerConnection && this.peerConnection.iceConnectionState === 'failed') {
-                  console.error('❌ ICE connection failed after all retries (incoming)');
-                  // One final attempt if we haven't exceeded max restarts
-                  if (this.iceRestartCount < this.maxIceRestarts) {
-                    console.log('🔄 Final retry attempt (incoming)...');
-                    this.attemptIceRestart('incoming', fromUserId);
-                  } else {
-                    this.updateCallState('failed');
-                  }
+                if (this.peerConnection && this.peerConnection.iceConnectionState === 'failed' && this.currentCall) {
+                  this.attemptIceRestart('incoming', fromUserId);
                 }
-              }, 15000); // Longer timeout for mobile networks
+              }, 3000); // Wait 3 seconds before restart
+            } else {
+              // All retries exhausted - wait much longer before giving up
+              setTimeout(() => {
+                if (this.peerConnection && this.peerConnection.iceConnectionState === 'failed' && this.currentCall) {
+                  console.error('❌ ICE connection failed after all retries (incoming)');
+                  // Only mark as failed if we're still failed after extended timeout
+                  this.updateCallState('failed');
+                }
+              }, 30000); // 30 seconds - much longer timeout before giving up
             }
           } else if (state === 'disconnected') {
             console.warn('⚠️ ICE connection disconnected (incoming)', isAndroid ? '(Android - may reconnect)' : '');
-            const timeout = isAndroid ? 20000 : 15000; // Increased timeouts
+            const timeout = isAndroid ? 30000 : 25000; // Much longer timeouts
             // Clear any existing recovery timeout
             if (this.connectionRecoveryTimeout) {
               clearTimeout(this.connectionRecoveryTimeout);
             }
             this.connectionRecoveryTimeout = setTimeout(() => {
-              if (this.peerConnection && this.peerConnection.iceConnectionState === 'disconnected') {
+              if (this.peerConnection && this.peerConnection.iceConnectionState === 'disconnected' && this.currentCall) {
                 console.warn('⚠️ Still disconnected after timeout (incoming), attempting recovery...');
                 // Try ICE restart if we haven't exceeded max attempts
                 if (this.iceRestartCount < this.maxIceRestarts) {
                   this.attemptIceRestart('incoming', fromUserId);
                 } else {
-                  console.error('❌ ICE connection failed to reconnect after all retries (incoming)');
-                  this.updateCallState('failed');
+                  // Don't mark as failed immediately - disconnected can recover
+                  console.warn('⚠️ Max ICE restarts reached, but keeping call active - may recover');
                 }
               }
             }, timeout);
@@ -871,10 +886,19 @@ class WebRTCService {
       // Handle connection state changes
       this.peerConnection.onconnectionstatechange = () => {
         if (this.peerConnection) {
-          console.log('Connection state:', this.peerConnection.connectionState);
+          console.log('Connection state (incoming):', this.peerConnection.connectionState);
           if (this.peerConnection.connectionState === 'failed') {
-            // Only mark as failed for actual failures, not disconnects
-            this.updateCallState('failed');
+            // Don't mark as failed immediately - give it time to recover
+            setTimeout(() => {
+              if (this.peerConnection && this.peerConnection.connectionState === 'failed' && this.currentCall) {
+                if (this.iceRestartCount >= this.maxIceRestarts) {
+                  console.error('❌ Connection failed after all retries (incoming)');
+                  this.updateCallState('failed');
+                } else {
+                  console.warn('⚠️ Connection failed but retries available (incoming)');
+                }
+              }
+            }, 10000); // Wait 10 seconds before marking as failed
           } else if (this.peerConnection.connectionState === 'disconnected' || 
                      this.peerConnection.connectionState === 'closed') {
             // Normal disconnect/close - set to ended if not already failed
