@@ -2,7 +2,6 @@
 class NotificationService {
   private static instance: NotificationService | null = null;
   private registration: ServiceWorkerRegistration | null = null;
-  private pushSubscription: PushSubscription | null = null;
 
   private constructor() {}
 
@@ -60,7 +59,7 @@ class NotificationService {
       // Subscribe to push notifications
       // Note: For production, you'll need a push service (Firebase Cloud Messaging, etc.)
       // For now, we'll use the service worker to show notifications when app is closed
-      this.pushSubscription = await this.registration.pushManager.subscribe({
+      await this.registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: null // Will be set when implementing full push service
       });
@@ -89,8 +88,7 @@ class NotificationService {
       if (this.registration) {
         await this.registration.showNotification(title, {
           ...options,
-          requireInteraction: true,
-          vibrate: [200, 100, 200]
+          requireInteraction: true
         });
         console.log('✅ Notification shown via service worker');
       } else {
