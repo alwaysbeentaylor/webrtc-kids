@@ -297,6 +297,44 @@ class FamilyService {
     }
   }
 
+  // Subscribe to family members with real-time updates (including online status)
+  subscribeToFamilyMembers(familyId: string, callback: (members: FamilyMember[]) => void): () => void {
+    try {
+      const q = query(collection(db, 'users'), where('familyId', '==', familyId));
+      
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const members = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as FamilyMember)).sort((a, b) => {
+          // Parents first, then children
+          if (a.role === 'parent' && b.role !== 'parent') return -1;
+          if (a.role !== 'parent' && b.role === 'parent') return 1;
+          return 0;
+        });
+        
+        console.log('📡 Real-time family members update:', members.length, 'members');
+        callback(members);
+      }, (error) => {
+        console.error('Error in family members subscription:', error);
+        // Fallback: try to get members once
+        this.getFamilyMembers(familyId).then(callback).catch(() => {
+          callback([]);
+        });
+      });
+      
+      return unsubscribe;
+    } catch (error) {
+      console.error('Error setting up family members subscription:', error);
+      // Fallback: try to get members once
+      this.getFamilyMembers(familyId).then(callback).catch(() => {
+        callback([]);
+      });
+      // Return empty unsubscribe function
+      return () => {};
+    }
+  }
+
   // Get user info
   async getUserInfo(userId: string): Promise<FamilyMember | null> {
     const userDoc = await getDoc(doc(db, 'users', userId));

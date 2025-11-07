@@ -58,19 +58,34 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
       setWelcomeMessage(savedMessage);
     }
     
-    loadFamilyMembers();
-    
     // Update online status
     familyService.updateOnlineStatus(currentUserId, true).catch(console.error);
     
-    // Refresh family members periodically to get online status updates
-    const interval = setInterval(() => {
-      loadFamilyMembers();
-    }, 5000); // Every 5 seconds
+    // Subscribe to real-time family members updates (including online status)
+    console.log('📡 Setting up real-time family members subscription...');
+    const unsubscribe = familyService.subscribeToFamilyMembers(familyId, (members) => {
+      console.log('📡 Real-time update received:', members.length, 'members');
+      
+      // Filter out current user and convert to contacts
+      const contactsList: Contact[] = members
+        .filter(member => member.id !== currentUserId)
+        .map(member => ({
+          id: member.id,
+          name: member.displayName,
+          type: member.role,
+          isOnline: member.isOnline || false,
+          gender: member.gender || null
+        }));
+      
+      console.log('✅ Updated contacts:', contactsList.length, 'contacts');
+      setContacts(contactsList);
+      setLoading(false);
+    });
     
     // Update online status on disconnect
     return () => {
-      clearInterval(interval);
+      console.log('🧹 Cleaning up family members subscription');
+      unsubscribe();
       familyService.updateOnlineStatus(currentUserId, false).catch(console.error);
     };
   }, [familyId, currentUserId]);
@@ -81,13 +96,13 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
       console.log('✅ Socket connected in BubbleHome');
       setSocketConnected(true);
       familyService.updateOnlineStatus(currentUserId, true).catch(console.error);
-      loadFamilyMembers(); // Refresh to show updated status
+      // Real-time subscription will automatically update the UI
     };
     const handleDisconnect = () => {
       console.log('❌ Socket disconnected in BubbleHome');
       setSocketConnected(false);
       familyService.updateOnlineStatus(currentUserId, false).catch(console.error);
-      loadFamilyMembers(); // Refresh to show updated status
+      // Real-time subscription will automatically update the UI
     };
 
     socketService.on('connect', handleConnect);
@@ -127,37 +142,6 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
     };
   }, [currentUserId]);
 
-  const loadFamilyMembers = async () => {
-    try {
-      console.log('📋 Loading family members:', { familyId, currentUserId });
-      if (!familyId || !currentUserId) {
-        console.log('⚠️ Cannot load: missing familyId or currentUserId');
-        setLoading(false);
-        return;
-      }
-      
-      const members = await familyService.getFamilyMembers(familyId);
-      console.log('✅ Got members from service:', members.length);
-
-      // Filter out current user and convert to contacts
-      const contactsList: Contact[] = members
-        .filter(member => member.id !== currentUserId)
-        .map(member => ({
-          id: member.id,
-          name: member.displayName,
-          type: member.role,
-          isOnline: member.isOnline || false,
-          gender: member.gender || null
-        }));
-      console.log('✅ Loaded contacts:', contactsList.length);
-      setContacts(contactsList);
-      setLoading(false);
-    } catch (error) {
-      console.error('❌ Error loading family members:', error);
-      setLoading(false);
-      setContacts([]);
-    }
-  };
 
   // Sort: parents first, then children, then by online status
   const sortedContacts = [...contacts].sort((a, b) => {
@@ -521,7 +505,7 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
       await familyService.deleteChild(childId, currentUserId);
       
       // Reload contacts to reflect deletion
-      await loadFamilyMembers();
+      // Real-time subscription will automatically update the UI
       
       // Close modal
       setDeleteModal(null);
@@ -1864,10 +1848,7 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
             <ChildCodeGenerator
               familyId={familyId}
               onCodeGenerated={() => {
-                // Reload contacts after code generation
-                setTimeout(() => {
-                  loadFamilyMembers();
-                }, 500);
+                // Real-time subscription will automatically update the UI
                 // Don't auto-close modal - let user copy/share code first
               }}
             />
@@ -2025,8 +2006,7 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
                           await familyService.updateDisplayName(currentUserId, newName.trim());
                           // Update local state
                           setCurrentUserName(newName.trim());
-                          // Reload contacts to reflect change
-                          await loadFamilyMembers();
+                          // Real-time subscription will automatically update the UI
                           alert('Naam succesvol aangepast!');
                         } catch (error) {
                           alert(error instanceof Error ? error.message : 'Kon naam niet aanpassen');
