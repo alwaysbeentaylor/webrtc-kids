@@ -50,27 +50,26 @@ const playIncomingCallSound = () => {
       if (!audioContext) return;
       
       try {
+        // Rustiger, zachter geluid met lagere frequenties
         const oscillator = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
         
         oscillator.connect(gainNode);
         gainNode.connect(audioContext.destination);
         
-        // Create a pleasant ringtone pattern
+        // Zachtere, lagere frequentie (523Hz = C5, rustiger dan 800Hz)
         oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+        oscillator.frequency.setValueAtTime(523, audioContext.currentTime);
         
-        // Volume envelope
+        // Zachtere volume envelope - langzamer opbouw, zachter volume
         gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.1);
-        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.3);
-        gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.4);
-        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.6);
+        gainNode.gain.linearRampToValueAtTime(0.15, audioContext.currentTime + 0.2); // Langzamer opbouw
+        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5); // Langzamer afbouw
         
         oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.6);
+        oscillator.stop(audioContext.currentTime + 0.5);
         
-        // Play second tone after a short pause
+        // Tweede toon na langere pauze - nog zachter
         setTimeout(() => {
           if (!audioContext) return;
           
@@ -80,18 +79,18 @@ const playIncomingCallSound = () => {
           oscillator2.connect(gainNode2);
           gainNode2.connect(audioContext.destination);
           
+          // Nog lagere frequentie (440Hz = A4, rustig)
           oscillator2.type = 'sine';
-          oscillator2.frequency.setValueAtTime(1000, audioContext.currentTime);
+          oscillator2.frequency.setValueAtTime(440, audioContext.currentTime);
           
+          // Nog zachter volume
           gainNode2.gain.setValueAtTime(0, audioContext.currentTime);
-          gainNode2.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.1);
-          gainNode2.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.3);
-          gainNode2.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.4);
-          gainNode2.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.6);
+          gainNode2.gain.linearRampToValueAtTime(0.12, audioContext.currentTime + 0.2);
+          gainNode2.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5);
           
           oscillator2.start(audioContext.currentTime);
-          oscillator2.stop(audioContext.currentTime + 0.6);
-        }, 700);
+          oscillator2.stop(audioContext.currentTime + 0.5);
+        }, 600); // Kortere pauze tussen tonen
       } catch (error) {
         console.error('Error playing ringtone:', error);
       }
@@ -100,10 +99,10 @@ const playIncomingCallSound = () => {
     // Play immediately
     playRing();
     
-    // Repeat every 2 seconds
+    // Repeat every 3 seconds (langzamer dan 2 seconden voor rustiger gevoel)
     ringtoneInterval = setInterval(() => {
       playRing();
-    }, 2000);
+    }, 3000);
   } catch (error) {
     console.error('Error initializing call sound:', error);
   }

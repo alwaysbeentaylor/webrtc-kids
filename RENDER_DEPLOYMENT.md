@@ -82,3 +82,4 @@ Klik op "Add Environment Variable" en voeg deze toe:
 - Als socket niet verbindt: Check of `CLIENT_ORIGIN` correct is ingesteld
 - Als de app niet start: Check of `package.json` een `start` script heeft
 
+

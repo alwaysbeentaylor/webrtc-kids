@@ -35,6 +35,8 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showConnectionDetails, setShowConnectionDetails] = useState(false);
   const [selectedChild, setSelectedChild] = useState<Contact | null>(null);
+  const [newCodeForChild, setNewCodeForChild] = useState<{ childId: string; code: string } | null>(null);
+  const [welcomeMessage, setWelcomeMessage] = useState<string>('Welkom, mijn familie');
 
   useEffect(() => {
     console.log('🔄 BubbleHome useEffect triggered:', { familyId, currentUserId });
@@ -42,6 +44,12 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
       console.log('⚠️ Missing familyId or currentUserId, skipping load');
       setLoading(false);
       return;
+    }
+    
+    // Load welcome message from localStorage
+    const savedMessage = localStorage.getItem(`welcomeMessage_${familyId}`);
+    if (savedMessage) {
+      setWelcomeMessage(savedMessage);
     }
     
     loadFamilyMembers();
@@ -702,19 +710,39 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
       )}
 
       {/* Welcome message - better positioned */}
-      <h1 style={{
-        marginTop: window.innerWidth < 768 ? '60px' : '80px',
-        marginBottom: window.innerWidth < 768 ? '0.5rem' : '0.75rem',
-        fontSize: window.innerWidth < 768 ? '1.5rem' : '2.2rem',
-        color: 'white',
-        textAlign: 'center',
-        fontFamily: 'system-ui',
-        textShadow: '0 2px 10px rgba(0,0,0,0.3)',
-        fontWeight: '700',
-        zIndex: 10,
-        position: 'relative'
-      }}>
-        Welkom{!isParent ? ', ' + currentUserName + '!' : '!'}
+      <h1 
+        onClick={isParent ? () => {
+          const newMessage = prompt('Welkom tekst aanpassen:', welcomeMessage);
+          if (newMessage !== null && newMessage.trim()) {
+            setWelcomeMessage(newMessage.trim());
+            // Save to localStorage
+            localStorage.setItem(`welcomeMessage_${familyId}`, newMessage.trim());
+          }
+        } : undefined}
+        style={{
+          marginTop: window.innerWidth < 768 ? '60px' : '80px',
+          marginBottom: window.innerWidth < 768 ? '0.5rem' : '0.75rem',
+          fontSize: window.innerWidth < 768 ? '1.5rem' : '2.2rem',
+          color: 'white',
+          textAlign: 'center',
+          fontFamily: 'system-ui',
+          textShadow: '0 2px 10px rgba(0,0,0,0.3)',
+          fontWeight: '700',
+          zIndex: 10,
+          position: 'relative',
+          cursor: isParent ? 'pointer' : 'default',
+          opacity: isParent ? 0.95 : 1,
+          transition: isParent ? 'opacity 0.2s' : 'none'
+        }}
+        onMouseEnter={isParent ? (e) => {
+          e.currentTarget.style.opacity = '1';
+        } : undefined}
+        onMouseLeave={isParent ? (e) => {
+          e.currentTarget.style.opacity = '0.95';
+        } : undefined}
+        title={isParent ? 'Klik om aan te passen' : undefined}
+      >
+        {isParent ? welcomeMessage : `Welkom, ${currentUserName}!`}
       </h1>
       
       <p style={{
@@ -1036,6 +1064,102 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
         )}
       </div>
 
+      {/* New Code Modal */}
+      {newCodeForChild && (
+        <div
+          onClick={() => setNewCodeForChild(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10001,
+            animation: 'fadeIn 0.2s ease'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '20px',
+              padding: '2rem',
+              maxWidth: '400px',
+              width: '90%',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+              animation: 'slideUp 0.3s ease',
+              textAlign: 'center'
+            }}
+          >
+            <h2 style={{ marginTop: 0, marginBottom: '1rem', color: '#333' }}>
+              🔑 Nieuwe Code
+            </h2>
+            <p style={{ marginBottom: '1.5rem', color: '#666', fontSize: '1rem' }}>
+              De nieuwe code voor {selectedChild?.name || 'dit kind'} is:
+            </p>
+            <div style={{
+              fontSize: '2.5rem',
+              fontWeight: 'bold',
+              color: '#2196F3',
+              letterSpacing: '0.5rem',
+              marginBottom: '1.5rem',
+              padding: '1rem',
+              backgroundColor: '#f5f5f5',
+              borderRadius: '12px',
+              fontFamily: 'monospace'
+            }}>
+              {newCodeForChild.code}
+            </div>
+            <p style={{ marginBottom: '1.5rem', color: '#999', fontSize: '0.9rem' }}>
+              Deze code is 24 uur geldig. Deel deze code met het kind om in te loggen.
+            </p>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(newCodeForChild.code).then(() => {
+                  alert('Code gekopieerd naar klembord!');
+                }).catch(() => {
+                  alert('Kon code niet kopiëren. Code: ' + newCodeForChild.code);
+                });
+              }}
+              style={{
+                width: '100%',
+                padding: '12px 24px',
+                backgroundColor: '#2196F3',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '16px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                marginBottom: '0.5rem'
+              }}
+            >
+              📋 Code Kopiëren
+            </button>
+            <button
+              onClick={() => setNewCodeForChild(null)}
+              style={{
+                width: '100%',
+                padding: '12px 24px',
+                backgroundColor: '#e0e0e0',
+                color: '#333',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '16px',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              Sluiten
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Child Detail Modal for Parents */}
       {selectedChild && (
         <div
@@ -1228,6 +1352,57 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
               >
                 <span style={{ fontSize: '20px' }}>📞</span>
                 <span>Bellen</span>
+              </button>
+              
+              <button
+                onClick={async () => {
+                  try {
+                    const childInfo = await familyService.getUserInfo(selectedChild.id);
+                    if (!childInfo) {
+                      alert('Kon kind informatie niet ophalen');
+                      return;
+                    }
+                    const code = await familyService.generateChildCode(
+                      familyId,
+                      childInfo.displayName,
+                      currentUserId,
+                      childInfo.gender || null
+                    );
+                    setNewCodeForChild({ childId: selectedChild.id, code });
+                  } catch (error) {
+                    alert(error instanceof Error ? error.message : 'Kon code niet genereren');
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  padding: '16px 24px',
+                  backgroundColor: '#FF9800',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.75rem',
+                  transition: 'all 0.2s',
+                  boxShadow: '0 4px 12px rgba(255, 152, 0, 0.3)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#F57C00';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(255, 152, 0, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#FF9800';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(255, 152, 0, 0.3)';
+                }}
+              >
+                <span style={{ fontSize: '20px' }}>🔑</span>
+                <span>Nieuwe Code Genereren</span>
               </button>
               
               <button
@@ -1809,13 +1984,49 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
                 }}>
                   👤 Account
                 </h3>
-                <p style={{
+                <div style={{
                   margin: '0.5rem 0',
-                  color: '#666',
-                  fontSize: '0.95rem'
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
                 }}>
-                  <strong>Naam:</strong> {currentUserName}
-                </p>
+                  <p style={{
+                    margin: 0,
+                    color: '#666',
+                    fontSize: '0.95rem'
+                  }}>
+                    <strong>Naam:</strong> {currentUserName}
+                  </p>
+                  <button
+                    onClick={async () => {
+                      const newName = prompt('Nieuwe naam:', currentUserName);
+                      if (newName && newName.trim() && newName.trim() !== currentUserName) {
+                        try {
+                          await familyService.updateDisplayName(currentUserId, newName.trim());
+                          // Update local state
+                          setCurrentUserName(newName.trim());
+                          // Reload contacts to reflect change
+                          await loadFamilyMembers();
+                          alert('Naam succesvol aangepast!');
+                        } catch (error) {
+                          alert(error instanceof Error ? error.message : 'Kon naam niet aanpassen');
+                        }
+                      }
+                    }}
+                    style={{
+                      padding: '6px 12px',
+                      backgroundColor: '#667eea',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ✏️ Aanpassen
+                  </button>
+                </div>
                 <p style={{
                   margin: '0.5rem 0',
                   color: '#666',

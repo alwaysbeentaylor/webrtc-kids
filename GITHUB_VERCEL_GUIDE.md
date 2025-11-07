@@ -122,3 +122,4 @@ Deze URL werkt overal ter wereld!
 - Je kunt meerdere environments hebben (production, preview, development)
 - Backend moet altijd draaien voor de app om te werken
 
+

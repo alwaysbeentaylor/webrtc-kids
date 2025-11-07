@@ -107,3 +107,4 @@ Je app is nu live op: `https://jouw-project.vercel.app`
 
 Deze URL werkt overal ter wereld!
 
+

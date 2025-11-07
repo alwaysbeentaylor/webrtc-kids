@@ -330,6 +330,22 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     }
   });
 
+  socket.on('call:cancel', (data) => {
+    console.log('Call cancel from:', socket.userId, 'to:', data.targetUserId);
+    // Forward cancel signal immediately (no role check needed for cancel)
+    io.to(`user:${data.targetUserId}`).emit('call:cancel', {
+      fromUserId: socket.userId
+    });
+  });
+
+  socket.on('call:hangup', (data) => {
+    console.log('Call hangup from:', socket.userId, 'to:', data.targetUserId);
+    // Forward hangup signal immediately (no role check needed - permissions handled client-side)
+    io.to(`user:${data.targetUserId}`).emit('call:hangup', {
+      fromUserId: socket.userId
+    });
+  });
+
           // Join user room for targeted messaging
           socket.on('join:user-room', () => {
             if (socket.userId) {

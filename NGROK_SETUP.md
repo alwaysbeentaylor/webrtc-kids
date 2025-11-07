@@ -44,3 +44,4 @@ ngrok http 4000
 ## Stap 6: Update SERVER_URL
 Pas de SERVER_URL in App.tsx aan naar de backend ngrok URL.
 
+

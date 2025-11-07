@@ -90,3 +90,4 @@ Als het nog steeds niet werkt:
 3. Controleer of je hebt gere-deployed na het toevoegen
 4. Open de browser console (F12) en kijk naar eventuele Firebase errors
 
+

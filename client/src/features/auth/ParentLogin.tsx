@@ -220,6 +220,43 @@ export function ParentLogin() {
             {mode === 'login' ? 'Nog geen account? Registreer hier' : 'Al een account? Log hier in'}
           </button>
         </div>
+
+        {mode === 'login' && (
+          <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!email) {
+                  setError('Voer eerst je e-mailadres in');
+                  return;
+                }
+                setError(null);
+                setSuccessMessage(null);
+                setLoading(true);
+                try {
+                  await firebaseService.requestPasswordReset(email);
+                  setSuccessMessage('Wachtwoord reset e-mail verzonden! Controleer je inbox.');
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'Kon reset e-mail niet verzenden');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#2196F3',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                textDecoration: 'underline',
+                fontSize: '14px',
+                opacity: loading ? 0.6 : 1
+              }}
+            >
+              Wachtwoord vergeten?
+            </button>
+          </div>
+        )}
     </div>
   );
 }

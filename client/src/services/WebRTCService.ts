@@ -33,6 +33,7 @@ class WebRTCService {
   private pendingOffer: { fromUserId: string; offer: RTCSessionDescriptionInit } | null = null;
 
   // STUN/TURN servers - TURN servers zijn essentieel voor Android NAT traversal
+  // Android heeft vaak restrictievere NAT/firewall settings dan iOS
   private readonly rtcConfig: RTCConfiguration = {
     iceServers: [
       // Google STUN servers
@@ -45,7 +46,8 @@ class WebRTCService {
       { urls: 'stun:stun.stunprotocol.org:3478' },
       { urls: 'stun:stun.voiparound.com' },
       { urls: 'stun:stun.voipbuster.com' },
-      // Free TURN servers (essential for Android NAT traversal)
+      // Free TURN servers - Multiple options for reliability
+      // OpenRelay (free, no auth required for basic usage)
       { 
         urls: 'turn:openrelay.metered.ca:80',
         username: 'openrelayproject',
@@ -65,10 +67,31 @@ class WebRTCService {
         urls: 'turn:openrelay.metered.ca:443?transport=tcp',
         username: 'openrelayproject',
         credential: 'openrelayproject'
+      },
+      // Additional TURN servers for Android reliability
+      {
+        urls: 'turn:relay.metered.ca:80',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      {
+        urls: 'turn:relay.metered.ca:443',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      {
+        urls: 'turn:relay.metered.ca:80?transport=tcp',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      {
+        urls: 'turn:relay.metered.ca:443?transport=tcp',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
       }
     ],
     iceCandidatePoolSize: 10, // Pre-gather more candidates for faster connection
-    iceTransportPolicy: 'all' // Use both relay and non-relay candidates
+    iceTransportPolicy: 'all' // Use both relay and non-relay candidates (important for Android)
   };
 
   private constructor() {
@@ -166,9 +189,11 @@ class WebRTCService {
     });
     socketService.on('call:hangup', (_data: { fromUserId: string }) => {
       // Call was hung up after answer - normal end
+      // Update state immediately for faster feedback
       if (this.currentCall && this.currentCall.state !== 'failed') {
         this.updateCallState('ended');
       }
+      // Cleanup immediately
       this.cleanup();
     });
     // Listen for socket errors (including permission denied)
@@ -384,36 +409,70 @@ class WebRTCService {
         this.peerConnection!.addTrack(track, stream);
       });
 
-      // Handle ICE candidates
+      // Handle ICE candidates with Android-specific logging
       this.peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
-          console.log('🧊 ICE candidate generated:', event.candidate.candidate);
+          const candidateType = event.candidate.type;
+          const candidateProtocol = event.candidate.protocol;
+          const isRelay = event.candidate.candidate.includes('relay') || event.candidate.candidate.includes('turn');
+          const isAndroid = /Android/i.test(navigator.userAgent);
+          
+          console.log('🧊 ICE candidate generated:', {
+            type: candidateType,
+            protocol: candidateProtocol,
+            isRelay: isRelay,
+            candidate: event.candidate.candidate.substring(0, 100),
+            platform: isAndroid ? 'Android' : 'Other'
+          });
+          
+          // Log specifically for Android if using relay (TURN)
+          if (isAndroid && isRelay) {
+            console.log('✅✅✅ Android using TURN server (relay) - this is good for NAT traversal!');
+          }
+          
           socketService.sendIceCandidate(targetUserId, event.candidate.toJSON());
         } else {
           console.log('✅ All ICE candidates gathered');
         }
       };
       
-      // Log ICE connection state
+      // Log ICE connection state with Android-specific handling
       this.peerConnection.oniceconnectionstatechange = () => {
         if (this.peerConnection) {
-          console.log('🧊 ICE connection state:', this.peerConnection.iceConnectionState);
-          if (this.peerConnection.iceConnectionState === 'connected' || 
-              this.peerConnection.iceConnectionState === 'completed') {
-            console.log('✅✅✅ ICE connection established!');
+          const isAndroid = /Android/i.test(navigator.userAgent);
+          const state = this.peerConnection.iceConnectionState;
+          
+          console.log('🧊 ICE connection state:', state, isAndroid ? '(Android)' : '');
+          
+          if (state === 'connected' || state === 'completed') {
+            console.log('✅✅✅ ICE connection established!', isAndroid ? '(Android)' : '');
             // Clear timeout once connected
             if (this.callTimeout) {
               clearTimeout(this.callTimeout);
               this.callTimeout = null;
             }
-          } else if (this.peerConnection.iceConnectionState === 'failed') {
-            console.error('❌ ICE connection failed - trying to restart ICE');
-            // Try to restart ICE gathering
-            if (this.peerConnection.restartIce) {
-              this.peerConnection.restartIce();
-              console.log('🔄 Restarting ICE gathering...');
+          } else if (state === 'failed') {
+            console.error('❌ ICE connection failed', isAndroid ? '(Android - TURN servers may be needed)' : '');
+            
+            // For Android, try more aggressive restart
+            if (isAndroid) {
+              console.log('🔄 Android: Attempting ICE restart with more TURN servers...');
+              // Try to restart ICE gathering
+              if (this.peerConnection.restartIce) {
+                this.peerConnection.restartIce();
+                console.log('🔄 Restarting ICE gathering on Android...');
+              }
+              
+              // Give Android more time before failing
+              setTimeout(() => {
+                if (this.peerConnection && this.peerConnection.iceConnectionState === 'failed') {
+                  console.error('❌ Android ICE connection still failed after retry');
+                  console.error('💡 Tip: Check if TURN servers are accessible from Android device');
+                  this.updateCallState('failed');
+                }
+              }, 10000); // 10 seconds for Android
             } else {
-              // Fallback: mark as failed after retry
+              // Non-Android: shorter timeout
               setTimeout(() => {
                 if (this.peerConnection && this.peerConnection.iceConnectionState === 'failed') {
                   console.error('❌ ICE connection still failed after retry');
@@ -421,15 +480,18 @@ class WebRTCService {
                 }
               }, 5000);
             }
-          } else if (this.peerConnection.iceConnectionState === 'disconnected') {
-            console.warn('⚠️ ICE connection disconnected - may reconnect');
-            // Give it time to reconnect
+          } else if (state === 'disconnected') {
+            console.warn('⚠️ ICE connection disconnected', isAndroid ? '(Android - may reconnect)' : '');
+            // Give it more time to reconnect on Android
+            const timeout = isAndroid ? 15000 : 10000;
             setTimeout(() => {
               if (this.peerConnection && this.peerConnection.iceConnectionState === 'disconnected') {
-                console.error('❌ ICE connection failed to reconnect');
+                console.error('❌ ICE connection failed to reconnect', isAndroid ? '(Android)' : '');
                 this.updateCallState('failed');
               }
-            }, 10000);
+            }, timeout);
+          } else if (state === 'checking') {
+            console.log('🔍 ICE connection checking...', isAndroid ? '(Android - gathering candidates)' : '');
           }
         }
       };
@@ -577,31 +639,60 @@ class WebRTCService {
         console.warn('⚠️  No local tracks to add (stream is empty or camera unavailable)');
       }
 
-      // Handle ICE candidates
+      // Handle ICE candidates with Android-specific logging (incoming)
       this.peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
-          console.log('🧊 ICE candidate generated (incoming):', event.candidate.candidate);
+          const candidateType = event.candidate.type;
+          const candidateProtocol = event.candidate.protocol;
+          const isRelay = event.candidate.candidate.includes('relay') || event.candidate.candidate.includes('turn');
+          const isAndroid = /Android/i.test(navigator.userAgent);
+          
+          console.log('🧊 ICE candidate generated (incoming):', {
+            type: candidateType,
+            protocol: candidateProtocol,
+            isRelay: isRelay,
+            candidate: event.candidate.candidate.substring(0, 100),
+            platform: isAndroid ? 'Android' : 'Other'
+          });
+          
+          if (isAndroid && isRelay) {
+            console.log('✅✅✅ Android using TURN server (relay) for incoming call!');
+          }
+          
           socketService.sendIceCandidate(fromUserId, event.candidate.toJSON());
         } else {
           console.log('✅ All ICE candidates gathered (incoming)');
         }
       };
       
-      // Log ICE connection state
+      // Log ICE connection state with Android-specific handling (incoming)
       this.peerConnection.oniceconnectionstatechange = () => {
         if (this.peerConnection) {
-          console.log('🧊 ICE connection state (incoming):', this.peerConnection.iceConnectionState);
-          if (this.peerConnection.iceConnectionState === 'connected' || 
-              this.peerConnection.iceConnectionState === 'completed') {
-            console.log('✅✅✅ ICE connection established (incoming)!');
-          } else if (this.peerConnection.iceConnectionState === 'failed') {
-            console.error('❌ ICE connection failed (incoming) - trying to restart ICE');
-            // Try to restart ICE gathering
-            if (this.peerConnection.restartIce) {
-              this.peerConnection.restartIce();
-              console.log('🔄 Restarting ICE gathering (incoming)...');
+          const isAndroid = /Android/i.test(navigator.userAgent);
+          const state = this.peerConnection.iceConnectionState;
+          
+          console.log('🧊 ICE connection state (incoming):', state, isAndroid ? '(Android)' : '');
+          
+          if (state === 'connected' || state === 'completed') {
+            console.log('✅✅✅ ICE connection established (incoming)!', isAndroid ? '(Android)' : '');
+          } else if (state === 'failed') {
+            console.error('❌ ICE connection failed (incoming)', isAndroid ? '(Android - TURN servers may be needed)' : '');
+            
+            if (isAndroid) {
+              console.log('🔄 Android: Attempting ICE restart for incoming call...');
+              if (this.peerConnection.restartIce) {
+                this.peerConnection.restartIce();
+                console.log('🔄 Restarting ICE gathering (incoming) on Android...');
+              }
+              
+              setTimeout(() => {
+                if (this.peerConnection && this.peerConnection.iceConnectionState === 'failed') {
+                  console.error('❌ Android ICE connection still failed after retry (incoming)');
+                  console.error('💡 Tip: Check if TURN servers are accessible from Android device');
+                  this.updateCallState('failed');
+                }
+              }, 10000);
             } else {
-              // Fallback: mark as failed after retry
               setTimeout(() => {
                 if (this.peerConnection && this.peerConnection.iceConnectionState === 'failed') {
                   console.error('❌ ICE connection still failed after retry (incoming)');
@@ -609,15 +700,17 @@ class WebRTCService {
                 }
               }, 5000);
             }
-          } else if (this.peerConnection.iceConnectionState === 'disconnected') {
-            console.warn('⚠️ ICE connection disconnected (incoming) - may reconnect');
-            // Give it time to reconnect
+          } else if (state === 'disconnected') {
+            console.warn('⚠️ ICE connection disconnected (incoming)', isAndroid ? '(Android - may reconnect)' : '');
+            const timeout = isAndroid ? 15000 : 10000;
             setTimeout(() => {
               if (this.peerConnection && this.peerConnection.iceConnectionState === 'disconnected') {
-                console.error('❌ ICE connection failed to reconnect (incoming)');
+                console.error('❌ ICE connection failed to reconnect (incoming)', isAndroid ? '(Android)' : '');
                 this.updateCallState('failed');
               }
-            }, 10000);
+            }, timeout);
+          } else if (state === 'checking') {
+            console.log('🔍 ICE connection checking (incoming)...', isAndroid ? '(Android - gathering candidates)' : '');
           }
         }
       };
@@ -874,6 +967,10 @@ class WebRTCService {
 
     if (this.currentCall.state !== 'ended') {
       const targetUserId = this.currentCall.targetUserId;
+      
+      // Update state immediately for faster UI feedback
+      this.updateCallState('ended');
+      
       // Send hangup signal (after answer) or cancel (before answer)
       const isPreAnswer = this.currentCall.state === 'dialing' || this.currentCall.state === 'ringing';
       if (isPreAnswer) {
@@ -881,8 +978,13 @@ class WebRTCService {
       } else {
         socketService.sendCallHangup(targetUserId);
       }
+      
+      // Cleanup immediately instead of waiting
+      this.cleanup();
+    } else {
+      // Already ended, just cleanup
+      this.cleanup();
     }
-    this.cleanup();
   }
 
   // Cleanup resources

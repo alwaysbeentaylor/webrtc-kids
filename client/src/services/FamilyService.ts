@@ -317,6 +317,21 @@ class FamilyService {
     });
   }
 
+  // Update user display name
+  async updateDisplayName(userId: string, newDisplayName: string): Promise<void> {
+    if (!newDisplayName || newDisplayName.trim().length < 2) {
+      throw new Error('Naam moet minimaal 2 karakters zijn');
+    }
+    if (newDisplayName.length > 50) {
+      throw new Error('Naam mag maximaal 50 karakters zijn');
+    }
+    
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, {
+      displayName: newDisplayName.trim()
+    });
+  }
+
   // Delete child account (only parents can delete children)
   async deleteChild(childUserId: string, parentUserId: string): Promise<void> {
     try {
