@@ -21,7 +21,7 @@ interface BubbleHomeProps {
   currentUserName: string;
 }
 
-export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, currentUserName }: BubbleHomeProps) {
+export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, currentUserName: initialUserName }: BubbleHomeProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [socketConnected, setSocketConnected] = useState(false);
@@ -37,6 +37,12 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
   const [selectedChild, setSelectedChild] = useState<Contact | null>(null);
   const [newCodeForChild, setNewCodeForChild] = useState<{ childId: string; code: string } | null>(null);
   const [welcomeMessage, setWelcomeMessage] = useState<string>('Welkom, mijn familie');
+  const [currentUserName, setCurrentUserName] = useState<string>(initialUserName);
+
+  // Sync currentUserName with prop changes
+  useEffect(() => {
+    setCurrentUserName(initialUserName);
+  }, [initialUserName]);
 
   useEffect(() => {
     console.log('🔄 BubbleHome useEffect triggered:', { familyId, currentUserId });
