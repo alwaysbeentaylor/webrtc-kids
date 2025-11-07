@@ -237,22 +237,27 @@ class SocketService {
       throw new Error('Cannot join user room - socket not connected');
     }
     
+    const socket = this.socket; // Store reference to avoid null checks
+    if (!socket) {
+      throw new Error('Socket is null');
+    }
+    
     return new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
-        this.socket?.off('room:joined', onRoomJoined);
+        socket.off('room:joined', onRoomJoined);
         reject(new Error('Room join timeout - no ACK received'));
       }, 5000); // 5 second timeout
       
       const onRoomJoined = (data: { room: string; userId: string }) => {
         clearTimeout(timeout);
-        this.socket?.off('room:joined', onRoomJoined);
+        socket.off('room:joined', onRoomJoined);
         console.log('✅✅✅ Room join ACK received:', data);
         resolve();
       };
       
       console.log('🏠🏠🏠 Joining user room...');
-      this.socket.once('room:joined', onRoomJoined);
-      this.socket.emit('join:user-room');
+      socket.once('room:joined', onRoomJoined);
+      socket.emit('join:user-room');
     });
   }
 
