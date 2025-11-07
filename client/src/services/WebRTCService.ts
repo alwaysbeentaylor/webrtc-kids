@@ -634,6 +634,18 @@ class WebRTCService {
       socketService.sendOffer(targetUserId, offer);
 
       console.log('📞 Call started to:', targetUserId);
+      
+      // Log device info for debugging inconsistent connections
+      const deviceInfo = {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        isAndroid: /Android/i.test(navigator.userAgent),
+        isIOS: /iPhone|iPad|iPod/i.test(navigator.userAgent),
+        connectionType: (navigator as any).connection?.effectiveType || 'unknown',
+        socketConnected: socketService.isConnected(),
+        timestamp: new Date().toISOString()
+      };
+      console.log('📱 Device info for outgoing call:', deviceInfo);
 
       // Set timeout for call - longer timeout for mobile networks (90 seconds)
       // Mobile networks can be slower, especially when switching between WiFi/4G

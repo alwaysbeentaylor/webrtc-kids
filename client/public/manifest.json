@@ -1,13 +1,19 @@
 {
   "name": "WebRTC Kids",
   "short_name": "Kids App",
-  "description": "Video calling app for families",
+  "description": "Video bellen app voor families",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#2196F3",
   "orientation": "portrait",
   "icons": [
+    {
+      "src": "/icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
@@ -20,7 +26,8 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "permissions": [
+    "notifications"
   ]
 }
-
-

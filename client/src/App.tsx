@@ -3,6 +3,7 @@ import { firebaseService, type AuthState } from './services/FirebaseService';
 import { socketService } from './services/SocketService';
 import { familyService } from './services/FamilyService';
 import { webrtcService } from './services/WebRTCService';
+import { notificationService } from './services/NotificationService';
 import { ParentLogin } from './features/auth/ParentLogin';
 import { ChildCodeLogin } from './features/auth/ChildCodeLogin';
 import { EmailVerificationPrompt } from './features/auth/EmailVerificationPrompt';
@@ -44,6 +45,8 @@ const playIncomingCallSound = () => {
   stopIncomingCallSound();
   
   try {
+    // CRITICAL: Resume AudioContext if suspended (browser autoplay policy)
+    // This is needed for audio to work when app is in background or not visible
     audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     
     const playRing = () => {
@@ -96,13 +99,27 @@ const playIncomingCallSound = () => {
       }
     };
     
-    // Play immediately
-    playRing();
-    
-    // Repeat every 3 seconds (langzamer dan 2 seconden voor rustiger gevoel)
-    ringtoneInterval = setInterval(() => {
+    // Resume audio context if suspended (required for autoplay policies)
+    const startPlaying = () => {
       playRing();
-    }, 3000);
+      // Repeat every 3 seconds
+      ringtoneInterval = setInterval(() => {
+        playRing();
+      }, 3000);
+    };
+    
+    if (audioContext.state === 'suspended') {
+      audioContext.resume().then(() => {
+        console.log('✅ AudioContext resumed for incoming call sound');
+        startPlaying();
+      }).catch(err => {
+        console.error('❌ Failed to resume AudioContext:', err);
+        // Try to play anyway
+        startPlaying();
+      });
+    } else {
+      startPlaying();
+    }
   } catch (error) {
     console.error('Error initializing call sound:', error);
   }
@@ -133,17 +150,18 @@ export const playOutgoingCallSound = () => {
       if (!outgoingCallAudioContext) return;
       
       try {
+        // Rustigere, zachtere dial tone - lagere frequenties en zachter volume
         const oscillator = outgoingCallAudioContext.createOscillator();
         const gainNode = outgoingCallAudioContext.createGain();
         
         oscillator.connect(gainNode);
         gainNode.connect(outgoingCallAudioContext.destination);
         
-        // Dial tone: two tones playing simultaneously
+        // Lagere, rustigere frequentie (400Hz in plaats van 350Hz)
         oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(350, outgoingCallAudioContext.currentTime);
+        oscillator.frequency.setValueAtTime(400, outgoingCallAudioContext.currentTime);
         
-        // Create second oscillator for dual tone
+        // Create second oscillator for dual tone - ook rustiger
         const oscillator2 = outgoingCallAudioContext.createOscillator();
         const gainNode2 = outgoingCallAudioContext.createGain();
         
@@ -151,24 +169,24 @@ export const playOutgoingCallSound = () => {
         gainNode2.connect(outgoingCallAudioContext.destination);
         
         oscillator2.type = 'sine';
-        oscillator2.frequency.setValueAtTime(440, outgoingCallAudioContext.currentTime);
+        oscillator2.frequency.setValueAtTime(500, outgoingCallAudioContext.currentTime); // Lagere tweede toon
         
-        // Volume envelope
+        // Zachtere volume envelope - langzamer opbouw, zachter volume
         gainNode.gain.setValueAtTime(0, outgoingCallAudioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(0.2, outgoingCallAudioContext.currentTime + 0.1);
-        gainNode.gain.setValueAtTime(0.2, outgoingCallAudioContext.currentTime + 0.4);
-        gainNode.gain.linearRampToValueAtTime(0, outgoingCallAudioContext.currentTime + 0.5);
+        gainNode.gain.linearRampToValueAtTime(0.12, outgoingCallAudioContext.currentTime + 0.15); // Zachter volume
+        gainNode.gain.setValueAtTime(0.12, outgoingCallAudioContext.currentTime + 0.4);
+        gainNode.gain.linearRampToValueAtTime(0, outgoingCallAudioContext.currentTime + 0.6); // Langzamer afbouw
         
         gainNode2.gain.setValueAtTime(0, outgoingCallAudioContext.currentTime);
-        gainNode2.gain.linearRampToValueAtTime(0.2, outgoingCallAudioContext.currentTime + 0.1);
-        gainNode2.gain.setValueAtTime(0.2, outgoingCallAudioContext.currentTime + 0.4);
-        gainNode2.gain.linearRampToValueAtTime(0, outgoingCallAudioContext.currentTime + 0.5);
+        gainNode2.gain.linearRampToValueAtTime(0.1, outgoingCallAudioContext.currentTime + 0.15); // Nog zachter
+        gainNode2.gain.setValueAtTime(0.1, outgoingCallAudioContext.currentTime + 0.4);
+        gainNode2.gain.linearRampToValueAtTime(0, outgoingCallAudioContext.currentTime + 0.6);
         
         oscillator.start(outgoingCallAudioContext.currentTime);
-        oscillator.stop(outgoingCallAudioContext.currentTime + 0.5);
+        oscillator.stop(outgoingCallAudioContext.currentTime + 0.6);
         
         oscillator2.start(outgoingCallAudioContext.currentTime);
-        oscillator2.stop(outgoingCallAudioContext.currentTime + 0.5);
+        oscillator2.stop(outgoingCallAudioContext.currentTime + 0.6);
       } catch (error) {
         console.error('Error playing dial tone:', error);
       }
@@ -177,10 +195,10 @@ export const playOutgoingCallSound = () => {
     // Play immediately
     playDialTone();
     
-    // Repeat every 0.5 seconds for continuous dial tone
+    // Repeat every 1 second (langzamer dan 0.5s voor rustiger gevoel)
     outgoingCallInterval = setInterval(() => {
       playDialTone();
-    }, 500);
+    }, 1000);
   } catch (error) {
     console.error('Error initializing outgoing call sound:', error);
   }
@@ -219,6 +237,11 @@ function App() {
   const [currentUserName, setCurrentUserName] = useState<string>('');
   const [isParent, setIsParent] = useState(false);
   const [initializationError, setInitializationError] = useState<string | null>(null);
+
+  // Initialize notification service and service worker
+  useEffect(() => {
+    notificationService.initialize().catch(console.error);
+  }, []);
 
   // Check for child session on mount
   useEffect(() => {
@@ -491,9 +514,33 @@ function App() {
               }
 
               console.log('✅✅✅✅✅ This call is for us! Processing...');
+              
+              // Log device info for debugging inconsistent connections
+              const deviceInfo = {
+                userAgent: navigator.userAgent,
+                platform: navigator.platform,
+                isAndroid: /Android/i.test(navigator.userAgent),
+                isIOS: /iPhone|iPad|iPod/i.test(navigator.userAgent),
+                connectionType: (navigator as any).connection?.effectiveType || 'unknown',
+                socketConnected: socketService.isConnected(),
+                timestamp: new Date().toISOString()
+              };
+              console.log('📱 Device info for incoming call:', deviceInfo);
 
               // Play incoming call sound
               playIncomingCallSound();
+              
+              // Show push notification (works even when app is closed/background)
+              notificationService.showNotification('Nieuwe oproep', {
+                body: 'Je hebt een oproep ontvangen',
+                icon: '/icon-192.png',
+                tag: `call-${data.fromUserId}`,
+                data: {
+                  fromUserId: data.fromUserId
+                }
+              }).catch(err => {
+                console.error('Failed to show notification:', err);
+              });
 
               // Get caller name and role from family service
               let callerName = data.fromUserId;
@@ -503,6 +550,19 @@ function App() {
                 callerName = callerInfo?.displayName || data.fromUserId;
                 callerRole = callerInfo?.role as 'parent' | 'child' | undefined;
                 console.log('✅ Caller info retrieved:', callerName, 'role:', callerRole);
+                
+                // Update notification with caller name if we got it
+                if (callerName !== data.fromUserId) {
+                  notificationService.showNotification(`Oproep van ${callerName}`, {
+                    body: 'Je hebt een oproep ontvangen',
+                    icon: '/icon-192.png',
+                    tag: `call-${data.fromUserId}`,
+                    data: {
+                      fromUserId: data.fromUserId,
+                      callerName: callerName
+                    }
+                  }).catch(() => {}); // Ignore errors on update
+                }
               } catch (error) {
                 console.error('❌ Error getting caller info:', error);
               }
