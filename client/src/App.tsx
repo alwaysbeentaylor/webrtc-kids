@@ -248,6 +248,7 @@ function App() {
   const [isParent, setIsParent] = useState(false);
   const [initializationError, setInitializationError] = useState<string | null>(null);
   const [callStateUpdate, setCallStateUpdate] = useState(0); // Force re-render when call state changes
+  const [webrtcCallerName, setWebrtcCallerName] = useState<string | null>(null);
 
   // Initialize notification service and service worker
   useEffect(() => {
@@ -715,6 +716,31 @@ function App() {
     };
   }, []);
 
+  // Fetch caller name when WebRTC call is detected
+  useEffect(() => {
+    const webrtcCall = webrtcService.getCurrentCall();
+    if (webrtcCall && webrtcCall.targetUserId && !webrtcCallerName) {
+      console.log('📞 Fetching caller name for:', webrtcCall.targetUserId);
+      familyService.getUserInfo(webrtcCall.targetUserId)
+        .then(info => {
+          if (info && info.displayName) {
+            console.log('✅ Caller name fetched:', info.displayName);
+            setWebrtcCallerName(info.displayName);
+          } else {
+            console.warn('⚠️ No displayName found, using userId');
+            setWebrtcCallerName(webrtcCall.targetUserId);
+          }
+        })
+        .catch(error => {
+          console.error('❌ Error fetching caller name:', error);
+          setWebrtcCallerName(webrtcCall.targetUserId);
+        });
+    } else if (!webrtcCall) {
+      // Reset caller name when call ends
+      setWebrtcCallerName(null);
+    }
+  }, [callStateUpdate, webrtcCallerName]);
+
   // Show loading state
   if (authState.loading && !childSession) {
     return (
@@ -924,7 +950,7 @@ function App() {
     // Determine call info from activeCall or webrtcCall
     const callInfo = activeCall || (webrtcCall ? {
       contactId: webrtcCall.direction === 'incoming' ? webrtcCall.targetUserId : webrtcCall.targetUserId,
-      contactName: webrtcCall.targetUserId, // Will show userId, caller name can be fetched by CallScreen if needed
+      contactName: webrtcCallerName || webrtcCall.targetUserId, // Use fetched name or fallback to userId
       remoteRole: undefined as 'parent' | 'child' | undefined
     } : null);
     
@@ -937,6 +963,7 @@ function App() {
           remoteRole={callInfo.remoteRole}
           onEndCall={() => {
             setActiveCall(null);
+            setWebrtcCallerName(null); // Reset caller name when call ends
             webrtcService.endCall();
             stopIncomingCallSound();
           }}
