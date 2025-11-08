@@ -367,6 +367,15 @@ function App() {
     });
     
     if (userId && familyId && (authState.user || childSession)) {
+      console.log('🔌🔌🔌 Socket connection conditions met:', {
+        userId,
+        familyId,
+        hasAuthUser: !!authState.user,
+        hasChildSession: !!childSession,
+        childSessionUserId: childSession?.userId,
+        willConnect: true
+      });
+      
       const connectSocket = async () => {
         try {
           console.log('🔌🔌🔌 Attempting to connect socket...', {
@@ -428,11 +437,20 @@ function App() {
           console.log('📋 Event handlers registered, now connecting...');
           
           await socketService.connect(SERVER_URL, async () => {
+            console.log('🔐🔐🔐 Token getter called:', {
+              hasChildSession: !!childSession,
+              childSessionUserId: childSession?.userId,
+              hasAuthUser: !!authState.user,
+              userId: userId
+            });
+            
             if (childSession) {
               const childToken = 'child-token-' + childSession.userId;
               console.log('🔐🔐🔐 Generating child token:', {
                 userId: childSession.userId,
-                token: childToken
+                token: childToken,
+                tokenLength: childToken.length,
+                startsWithChildToken: childToken.startsWith('child-token-')
               });
               return childToken;
             }
