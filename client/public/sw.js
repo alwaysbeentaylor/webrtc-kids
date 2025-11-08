@@ -9,24 +9,45 @@ const HEARTBEAT_INTERVAL = 60000; // 60 seconds (less frequent to avoid conflict
 let heartbeatInterval = null;
 
 // Initialize Firebase in service worker
-// Note: These values should match your Firebase config
-const firebaseConfig = {
-  apiKey: self.location.hostname === 'localhost' ? 'your-api-key' : undefined, // Will be set by client
-  authDomain: undefined, // Will be set by client
-  projectId: undefined, // Will be set by client
-  storageBucket: undefined, // Will be set by client
-  messagingSenderId: undefined, // Will be set by client
-  appId: undefined // Will be set by client
-};
-
-// Initialize Firebase (will be configured by client)
+// Firebase config will be sent from client via postMessage
 let messaging = null;
+let firebaseInitialized = false;
+
+// Listen for Firebase config from client
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'FIREBASE_CONFIG' && !firebaseInitialized) {
+    try {
+      const firebaseConfig = event.data.config;
+      firebase.initializeApp(firebaseConfig);
+      messaging = firebase.messaging();
+      firebaseInitialized = true;
+      console.log('✅ Firebase initialized in service worker');
+    } catch (error) {
+      console.warn('⚠️ Firebase initialization in SW failed:', error);
+    }
+  }
+});
+
+// Try to initialize Firebase with default config (fallback)
 try {
-  firebase.initializeApp(firebaseConfig);
-  messaging = firebase.messaging();
-  console.log('✅ Firebase initialized in service worker');
+  const defaultConfig = {
+    apiKey: "AIzaSyDxJZJZJZJZJZJZJZJZJZJZJZJZJZJZJZJZ",
+    authDomain: "xoma-7c1d7.firebaseapp.com",
+    projectId: "xoma-7c1d7",
+    storageBucket: "xoma-7c1d7.appspot.com",
+    messagingSenderId: "123456789012",
+    appId: "1:123456789012:web:abcdef123456"
+  };
+  
+  // Only initialize if not already initialized
+  if (!firebaseInitialized) {
+    firebase.initializeApp(defaultConfig);
+    messaging = firebase.messaging();
+    firebaseInitialized = true;
+    console.log('✅ Firebase initialized in service worker (fallback)');
+  }
 } catch (error) {
-  console.warn('⚠️ Firebase initialization in SW failed (will be configured by client):', error);
+  console.warn('⚠️ Firebase initialization in SW failed (will wait for client config):', error);
 }
 
 self.addEventListener('install', (event) => {

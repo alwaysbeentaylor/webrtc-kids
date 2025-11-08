@@ -56,6 +56,23 @@ class NotificationService {
         });
       }
 
+      // Send Firebase config to service worker
+      if (this.registration.active) {
+        const firebaseConfig = {
+          apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+          authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+          projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
+          storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+          messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+          appId: import.meta.env.VITE_FIREBASE_APP_ID || ''
+        };
+        this.registration.active.postMessage({
+          type: 'FIREBASE_CONFIG',
+          config: firebaseConfig
+        });
+        console.log('✅ Firebase config sent to service worker');
+      }
+
       // Don't auto-request permission on iOS - requires user gesture
       // Permission will be requested via explicit button click
       console.log('📱 Notification permission status:', Notification.permission);
