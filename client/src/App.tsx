@@ -10,6 +10,8 @@ import { EmailVerificationPrompt } from './features/auth/EmailVerificationPrompt
 import { BubbleHome } from './features/home/BubbleHome';
 import { CallScreen } from './features/call/CallScreen';
 
+console.log('🚀 Build version:', '2025-11-08T16:30:00Z');
+
 // Determine server URL based on environment
 // On mobile/other devices, use the computer's IP address instead of localhost
 // For external access (ngrok, etc.), set VITE_BACKEND_URL environment variable
