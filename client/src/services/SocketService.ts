@@ -115,15 +115,30 @@ class SocketService {
       throw new Error('No authentication token available');
     }
 
+    // Detect mobile device
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isAndroid = /Android/i.test(navigator.userAgent);
+
     console.log('🔐🔐🔐 Establishing socket connection with token:', {
       tokenPrefix: token.substring(0, 30) + '...',
       isChildToken: token.startsWith('child-token-'),
-      tokenLength: token.length
+      tokenLength: token.length,
+      isMobile,
+      isIOS,
+      isAndroid,
+      userAgent: navigator.userAgent
     });
+
+    // On mobile devices, prefer polling first (more reliable on mobile networks)
+    // On desktop, prefer websocket first (faster)
+    const transports = isMobile ? ['polling', 'websocket'] : ['websocket', 'polling'];
 
     // FORCE token to be sent in multiple ways
     const connectionOptions: any = {
-      transports: ['websocket', 'polling'], // Try websocket first, fallback to polling
+      transports: transports, // Mobile: polling first, Desktop: websocket first
+      upgrade: true, // Allow upgrade from polling to websocket
+      rememberUpgrade: false, // Don't remember upgrade preference (try both each time)
       auth: {
         token: token
       },
@@ -131,16 +146,20 @@ class SocketService {
         token: token
       },
       reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
+      reconnectionDelay: isMobile ? 2000 : 1000, // Longer delay on mobile
+      reconnectionDelayMax: isMobile ? 10000 : 5000, // Longer max delay on mobile
       reconnectionAttempts: this.maxReconnectAttempts,
+      timeout: isMobile ? 20000 : 10000, // Longer timeout on mobile (20s vs 10s)
       forceNew: true // Force new connection
     };
     
     console.log('🔐🔐🔐 Connecting with options:', {
       serverUrl: this.serverUrl,
       tokenPrefix: token.substring(0, 30),
-      isChildToken: token.startsWith('child-token-')
+      isChildToken: token.startsWith('child-token-'),
+      transports: transports,
+      timeout: connectionOptions.timeout,
+      isMobile
     });
     
     this.socket = io(this.serverUrl, connectionOptions);
@@ -150,7 +169,9 @@ class SocketService {
       console.log('✅✅✅✅✅ Socket.IO CONNECTED!', {
         socketId: this.socket?.id,
         connected: this.socket?.connected,
-        serverUrl: this.serverUrl
+        serverUrl: this.serverUrl,
+        transport: this.socket?.io?.engine?.transport?.name || 'unknown',
+        isMobile
       });
     });
 
@@ -162,7 +183,9 @@ class SocketService {
         type: anyError?.type,
         description: anyError?.description,
         serverUrl: this.serverUrl,
-        tokenPrefix: token.substring(0, 30)
+        tokenPrefix: token.substring(0, 30),
+        isMobile,
+        userAgent: navigator.userAgent
       });
       
       // Show user-friendly error
@@ -172,7 +195,15 @@ class SocketService {
     });
 
     this.socket.on('disconnect', (reason) => {
-      console.log('🔌 Socket disconnected:', reason);
+      console.log('🔌 Socket disconnected:', reason, {
+        isMobile,
+        transport: this.socket?.io?.engine?.transport?.name || 'unknown'
+      });
+    });
+
+    // Log transport upgrades
+    this.socket.io?.engine?.on('upgrade', () => {
+      console.log('⬆️ Transport upgraded to:', this.socket?.io?.engine?.transport?.name);
     });
   }
 
