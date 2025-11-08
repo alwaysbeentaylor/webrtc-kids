@@ -247,6 +247,7 @@ function App() {
   const [currentUserName, setCurrentUserName] = useState<string>('');
   const [isParent, setIsParent] = useState(false);
   const [initializationError, setInitializationError] = useState<string | null>(null);
+  const [webrtcCallerName, setWebrtcCallerName] = useState<string | null>(null);
 
   // Initialize notification service and service worker
   useEffect(() => {
@@ -883,15 +884,9 @@ function App() {
     );
   }
 
-  // Show call screen if active call OR if WebRTCService has an incoming call
-  const webrtcCall = webrtcService.getCurrentCall();
-  const shouldShowCallScreen = activeCall || (webrtcCall && webrtcCall.direction === 'incoming' && webrtcCall.state === 'ringing');
-  
-  // State to store caller name for WebRTC calls
-  const [webrtcCallerName, setWebrtcCallerName] = useState<string | null>(null);
-  
   // Fetch caller name when WebRTC call is detected
   useEffect(() => {
+    const webrtcCall = webrtcService.getCurrentCall();
     if (webrtcCall && webrtcCall.direction === 'incoming' && webrtcCall.state === 'ringing' && !webrtcCallerName) {
       familyService.getUserInfo(webrtcCall.targetUserId).then(info => {
         setWebrtcCallerName(info?.displayName || webrtcCall.targetUserId);
@@ -899,7 +894,11 @@ function App() {
         setWebrtcCallerName(webrtcCall.targetUserId);
       });
     }
-  }, [webrtcCall, webrtcCallerName]);
+  }, [webrtcCallerName]);
+  
+  // Show call screen if active call OR if WebRTCService has an incoming call
+  const webrtcCall = webrtcService.getCurrentCall();
+  const shouldShowCallScreen = activeCall || (webrtcCall && webrtcCall.direction === 'incoming' && webrtcCall.state === 'ringing');
   
   if (shouldShowCallScreen && familyId && currentUserId) {
     // Stop ringtone when call screen is shown
