@@ -26,6 +26,13 @@ export interface FamilyMember {
   parentGender?: 'mother' | 'father' | null;
 }
 
+export interface FamilyDoc {
+  name?: string;
+  createdAt?: any;
+  guardianIds?: string[];
+  welcomeTitle?: string | null;
+}
+
 export interface ChildCode {
   code: string;
   childName: string;
@@ -56,6 +63,7 @@ class FamilyService {
       const familyRef = doc(db, 'families', familyId);
       await setDoc(familyRef, {
         name: `${displayName}'s Familie`,
+        welcomeTitle: 'Welkom familie',
         createdAt: serverTimestamp(),
         guardianIds: [userId]
       });
@@ -81,6 +89,57 @@ class FamilyService {
       localStorage.setItem(`family_${userId}`, fallbackId);
       throw error; // Re-throw so caller can handle
     }
+  }
+
+  // Get family doc
+  async getFamily(familyId: string): Promise<FamilyDoc | null> {
+    const familyRef = doc(db, 'families', familyId);
+    const snap = await getDoc(familyRef);
+    if (!snap.exists()) return null;
+    return snap.data() as FamilyDoc;
+  }
+
+  // Live subscribe to family doc
+  subscribeToFamily(familyId: string, onChange: (data: FamilyDoc | null) => void): () => void {
+    try {
+      const familyRef = doc(db, 'families', familyId);
+      const unsub = onSnapshot(familyRef, (snap) => {
+        try {
+          if (!snap.exists()) {
+            onChange(null);
+          } else {
+            onChange(snap.data() as FamilyDoc);
+          }
+        } catch (err) {
+          console.error('Error processing family doc snapshot:', err);
+          onChange(null);
+        }
+      }, (error) => {
+        console.error('Error subscribing to family doc:', error);
+        // Don't crash, just log the error
+        onChange(null);
+      });
+      return unsub;
+    } catch (error) {
+      console.error('Error setting up family subscription:', error);
+      // Return a no-op unsubscribe function
+      return () => {};
+    }
+  }
+
+  // Get welcome title (one-off)
+  async getWelcomeTitle(familyId: string): Promise<string> {
+    const family = await this.getFamily(familyId);
+    return (family?.welcomeTitle ?? 'Welkom familie');
+  }
+
+  // Set welcome title
+  async setWelcomeTitle(familyId: string, title: string): Promise<void> {
+    const familyRef = doc(db, 'families', familyId);
+    await updateDoc(familyRef, {
+      welcomeTitle: title || 'Welkom familie',
+      updatedAt: serverTimestamp()
+    });
   }
 
   // Check if family has reached max parents (2)

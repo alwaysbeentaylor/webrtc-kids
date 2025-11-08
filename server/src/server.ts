@@ -7,6 +7,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { AuthenticatedSocket } from './auth/socketAuth';
 import fs from 'fs';
 import path from 'path';
+import firebaseAdmin from './config/firebase-admin';
 
 const app = express();
 
@@ -97,6 +98,78 @@ app.use(express.json());
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'signaling-server' });
 });
+
+// Store FCM tokens per user
+const fcmTokens = new Map<string, string>();
+
+// Endpoint to store FCM token
+app.post('/api/fcm-token', (req, res) => {
+  try {
+    const { userId, fcmToken } = req.body;
+    
+    if (!userId || !fcmToken) {
+      return res.status(400).json({ error: 'userId and fcmToken are required' });
+    }
+    
+    fcmTokens.set(userId, fcmToken);
+    console.log(`✅ FCM token stored for user: ${userId}`);
+    console.log(`📱 Token: ${fcmToken.substring(0, 20)}...`);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Error storing FCM token:', error);
+    res.status(500).json({ error: 'Failed to store FCM token' });
+  }
+});
+
+// Helper function to send FCM push notification
+async function sendFCMPush(userId: string, title: string, body: string, data: any): Promise<void> {
+  try {
+    const fcmToken = fcmTokens.get(userId);
+    if (!fcmToken) {
+      console.log(`⚠️ No FCM token found for user: ${userId}`);
+      return;
+    }
+    
+    if (!firebaseAdmin) {
+      console.warn('⚠️ Firebase Admin not initialized, cannot send push notification');
+      return;
+    }
+    
+    const message = {
+      notification: {
+        title,
+        body
+      },
+      data: {
+        ...data,
+        click_action: 'FLUTTER_NOTIFICATION_CLICK'
+      },
+      token: fcmToken,
+      webpush: {
+        notification: {
+          title,
+          body,
+          icon: '/icon-192.png',
+          badge: '/icon-96.png',
+          requireInteraction: true,
+          vibrate: [200, 100, 200, 100, 200]
+        },
+        fcmOptions: {
+          link: '/'
+        }
+      }
+    };
+    
+    const response = await firebaseAdmin.messaging().send(message);
+    console.log(`✅ FCM push notification sent successfully: ${response}`);
+  } catch (error) {
+    console.error(`❌ Error sending FCM push notification to ${userId}:`, error);
+    if (error instanceof Error) {
+      console.error('Error message:', error.message);
+    }
+  }
+}
 
 const io = new SocketIOServer(server, {
   cors: {
@@ -336,6 +409,24 @@ io.on('connection', (socket: AuthenticatedSocket) => {
           const socketsInRoom = io.sockets.adapter.rooms.get(targetRoom);
           const socketCount = socketsInRoom ? socketsInRoom.size : 0;
           process.stdout.write(`📤 Sockets in room: ${socketCount}\n`);
+          
+          // Send FCM push notification if target user is not connected via socket
+          if (socketCount === 0) {
+            process.stdout.write(`📱 No active socket connection, sending FCM push notification...\n`);
+            sendFCMPush(
+              data.targetUserId,
+              'Nieuwe oproep',
+              'Je hebt een oproep ontvangen',
+              {
+                type: 'call:offer',
+                fromUserId: socket.userId || '',
+                targetUserId: data.targetUserId,
+                callId: `call-${Date.now()}`
+              }
+            ).catch(err => {
+              console.error('❌ Failed to send FCM push:', err);
+            });
+          }
           
           process.stdout.write(`✅✅✅ Call offer forwarded to: ${targetRoom}\n\n`);
     });

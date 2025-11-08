@@ -91,3 +91,4 @@ Als het nog steeds niet werkt:
 4. Open de browser console (F12) en kijk naar eventuele Firebase errors
 
 
+

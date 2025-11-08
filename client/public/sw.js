@@ -1,9 +1,33 @@
 // Service Worker for Push Notifications and Background Sync
+importScripts('https://www.gstatic.com/firebasejs/12.5.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/12.5.0/firebase-messaging-compat.js');
+
 const CACHE_NAME = 'webrtc-kids-v1';
 const HEARTBEAT_INTERVAL = 60000; // 60 seconds (less frequent to avoid conflicts)
 
 // Keep service worker alive with periodic wake-ups
 let heartbeatInterval = null;
+
+// Initialize Firebase in service worker
+// Note: These values should match your Firebase config
+const firebaseConfig = {
+  apiKey: self.location.hostname === 'localhost' ? 'your-api-key' : undefined, // Will be set by client
+  authDomain: undefined, // Will be set by client
+  projectId: undefined, // Will be set by client
+  storageBucket: undefined, // Will be set by client
+  messagingSenderId: undefined, // Will be set by client
+  appId: undefined // Will be set by client
+};
+
+// Initialize Firebase (will be configured by client)
+let messaging = null;
+try {
+  firebase.initializeApp(firebaseConfig);
+  messaging = firebase.messaging();
+  console.log('✅ Firebase initialized in service worker');
+} catch (error) {
+  console.warn('⚠️ Firebase initialization in SW failed (will be configured by client):', error);
+}
 
 self.addEventListener('install', (event) => {
   console.log('Service Worker installing...');
@@ -48,7 +72,7 @@ function startHeartbeat() {
   console.log('✅ Heartbeat started');
 }
 
-// Handle push notifications (from push service)
+// Handle push notifications (from FCM or push service)
 self.addEventListener('push', (event) => {
   console.log('📬 Push notification received:', event);
   
@@ -61,15 +85,25 @@ self.addEventListener('push', (event) => {
     }
   }
   
-  const title = data.title || 'Nieuwe oproep';
+  // Handle FCM payload format
+  const notificationData = data.notification || data;
+  const title = notificationData.title || data.title || 'Nieuwe oproep';
+  const body = notificationData.body || data.body || 'Je hebt een oproep ontvangen';
+  const icon = notificationData.icon || data.icon || '/icon-192.png';
+  const callData = data.data || {};
+  
   const options = {
-    body: data.body || 'Je hebt een oproep ontvangen',
-    icon: data.icon || '/icon-192.png',
+    body: body,
+    icon: icon,
     badge: '/icon-96.png',
-    tag: data.tag || `call-${Date.now()}`,
+    tag: callData.callId || data.tag || `call-${Date.now()}`,
     requireInteraction: true,
     vibrate: [200, 100, 200, 100, 200],
-    data: data.data || {},
+    data: {
+      ...callData,
+      fromUserId: callData.fromUserId || data.fromUserId,
+      targetUserId: callData.targetUserId || data.targetUserId
+    },
     actions: [
       { action: 'answer', title: 'Beantwoorden' },
       { action: 'decline', title: 'Weigeren' }
@@ -80,6 +114,30 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(title, options)
   );
 });
+
+// Handle FCM background messages (when app is closed)
+if (messaging) {
+  messaging.onBackgroundMessage((payload) => {
+    console.log('📬 FCM background message received:', payload);
+    
+    const notificationTitle = payload.notification?.title || 'Nieuwe oproep';
+    const notificationOptions = {
+      body: payload.notification?.body || 'Je hebt een oproep ontvangen',
+      icon: payload.notification?.icon || '/icon-192.png',
+      badge: '/icon-96.png',
+      tag: payload.data?.callId || `call-${Date.now()}`,
+      requireInteraction: true,
+      vibrate: [200, 100, 200, 100, 200],
+      data: payload.data || {},
+      actions: [
+        { action: 'answer', title: 'Beantwoorden' },
+        { action: 'decline', title: 'Weigeren' }
+      ]
+    };
+    
+    return self.registration.showNotification(notificationTitle, notificationOptions);
+  });
+}
 
 // Handle notification clicks
 self.addEventListener('notificationclick', (event) => {

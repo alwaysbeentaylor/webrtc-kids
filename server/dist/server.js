@@ -44,6 +44,7 @@ const cors_1 = __importDefault(require("cors"));
 const socket_io_1 = require("socket.io");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
+const firebase_admin_1 = __importDefault(require("./config/firebase-admin"));
 const app = (0, express_1.default)();
 // Try to create HTTPS server, fallback to HTTP
 let server;
@@ -126,6 +127,71 @@ app.use(express_1.default.json());
 app.get('/health', (_req, res) => {
     res.json({ ok: true, service: 'signaling-server' });
 });
+// Store FCM tokens per user
+const fcmTokens = new Map();
+// Endpoint to store FCM token
+app.post('/api/fcm-token', (req, res) => {
+    try {
+        const { userId, fcmToken } = req.body;
+        if (!userId || !fcmToken) {
+            return res.status(400).json({ error: 'userId and fcmToken are required' });
+        }
+        fcmTokens.set(userId, fcmToken);
+        console.log(`✅ FCM token stored for user: ${userId}`);
+        console.log(`📱 Token: ${fcmToken.substring(0, 20)}...`);
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error('❌ Error storing FCM token:', error);
+        res.status(500).json({ error: 'Failed to store FCM token' });
+    }
+});
+// Helper function to send FCM push notification
+async function sendFCMPush(userId, title, body, data) {
+    try {
+        const fcmToken = fcmTokens.get(userId);
+        if (!fcmToken) {
+            console.log(`⚠️ No FCM token found for user: ${userId}`);
+            return;
+        }
+        if (!firebase_admin_1.default) {
+            console.warn('⚠️ Firebase Admin not initialized, cannot send push notification');
+            return;
+        }
+        const message = {
+            notification: {
+                title,
+                body
+            },
+            data: {
+                ...data,
+                click_action: 'FLUTTER_NOTIFICATION_CLICK'
+            },
+            token: fcmToken,
+            webpush: {
+                notification: {
+                    title,
+                    body,
+                    icon: '/icon-192.png',
+                    badge: '/icon-96.png',
+                    requireInteraction: true,
+                    vibrate: [200, 100, 200, 100, 200]
+                },
+                fcmOptions: {
+                    link: '/'
+                }
+            }
+        };
+        const response = await firebase_admin_1.default.messaging().send(message);
+        console.log(`✅ FCM push notification sent successfully: ${response}`);
+    }
+    catch (error) {
+        console.error(`❌ Error sending FCM push notification to ${userId}:`, error);
+        if (error instanceof Error) {
+            console.error('Error message:', error.message);
+        }
+    }
+}
 const io = new socket_io_1.Server(server, {
     cors: {
         origin: (origin, callback) => {
@@ -330,6 +396,18 @@ io.on('connection', (socket) => {
             const socketsInRoom = io.sockets.adapter.rooms.get(targetRoom);
             const socketCount = socketsInRoom ? socketsInRoom.size : 0;
             process.stdout.write(`📤 Sockets in room: ${socketCount}\n`);
+            // Send FCM push notification if target user is not connected via socket
+            if (socketCount === 0) {
+                process.stdout.write(`📱 No active socket connection, sending FCM push notification...\n`);
+                sendFCMPush(data.targetUserId, 'Nieuwe oproep', 'Je hebt een oproep ontvangen', {
+                    type: 'call:offer',
+                    fromUserId: socket.userId || '',
+                    targetUserId: data.targetUserId,
+                    callId: `call-${Date.now()}`
+                }).catch(err => {
+                    console.error('❌ Failed to send FCM push:', err);
+                });
+            }
             process.stdout.write(`✅✅✅ Call offer forwarded to: ${targetRoom}\n\n`);
         });
     });

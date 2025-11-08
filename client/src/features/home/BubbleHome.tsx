@@ -55,12 +55,6 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
       return;
     }
     
-    // Load welcome message from localStorage
-    const savedMessage = localStorage.getItem(`welcomeMessage_${familyId}`);
-    if (savedMessage) {
-      setWelcomeMessage(savedMessage);
-    }
-    
     // Update online status
     familyService.updateOnlineStatus(currentUserId, true).catch(console.error);
     
@@ -92,6 +86,49 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
       familyService.updateOnlineStatus(currentUserId, false).catch(console.error);
     };
   }, [familyId, currentUserId]);
+
+  // Subscribe to welcome message from Firestore (real-time updates)
+  useEffect(() => {
+    if (!familyId) return;
+    
+    let unsubscribe: (() => void) | null = null;
+    
+    try {
+      // Load initial welcome message
+      familyService.getWelcomeTitle(familyId).then(title => {
+        setWelcomeMessage(title);
+      }).catch(err => {
+        console.error('Error loading welcome title:', err);
+        setWelcomeMessage('Welkom familie');
+      });
+      
+      // Subscribe to real-time updates
+      unsubscribe = familyService.subscribeToFamily(familyId, (familyDoc) => {
+        try {
+          if (familyDoc?.welcomeTitle) {
+            setWelcomeMessage(familyDoc.welcomeTitle);
+          } else {
+            setWelcomeMessage('Welkom familie');
+          }
+        } catch (err) {
+          console.error('Error processing welcome title update:', err);
+        }
+      });
+    } catch (error) {
+      console.error('Error setting up welcome message subscription:', error);
+      setWelcomeMessage('Welkom familie');
+    }
+    
+    return () => {
+      if (unsubscribe) {
+        try {
+          unsubscribe();
+        } catch (err) {
+          console.error('Error unsubscribing from welcome message:', err);
+        }
+      }
+    };
+  }, [familyId]);
 
   // Listen for socket connect/disconnect to update online status
   useEffect(() => {
@@ -778,12 +815,15 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
 
       {/* Welcome message - better positioned */}
       <h1 
-        onClick={isParent ? () => {
+        onClick={isParent ? async () => {
           const newMessage = prompt('Welkom tekst aanpassen:', welcomeMessage);
-          if (newMessage !== null && newMessage.trim()) {
-            setWelcomeMessage(newMessage.trim());
-            // Save to localStorage
-            localStorage.setItem(`welcomeMessage_${familyId}`, newMessage.trim());
+          if (newMessage !== null && newMessage.trim() && newMessage.trim() !== welcomeMessage) {
+            try {
+              await familyService.setWelcomeTitle(familyId, newMessage.trim());
+              // Real-time subscription will automatically update the UI
+            } catch (error) {
+              alert(error instanceof Error ? error.message : 'Kon welkomsttekst niet aanpassen');
+            }
           }
         } : undefined}
         style={{
@@ -809,7 +849,7 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
         } : undefined}
         title={isParent ? 'Klik om aan te passen' : undefined}
       >
-        {isParent ? welcomeMessage : `Welkom, ${currentUserName}!`}
+        {welcomeMessage}
       </h1>
       
       <p style={{

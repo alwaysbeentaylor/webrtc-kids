@@ -503,3 +503,4 @@ const interval = setInterval(() => {
 
 *Dit rapport identificeert potentiële bugs zonder de app te breken. Alle aanbevelingen moeten worden getest voordat ze worden geïmplementeerd.*
 
+

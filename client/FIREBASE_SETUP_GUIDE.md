@@ -102,3 +102,4 @@ Als je snel de rest van de app wilt zien zonder Firebase setup, kan ik een demo 
 
 
 
+

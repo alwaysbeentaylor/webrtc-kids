@@ -43,3 +43,4 @@ De app deployen naar een gratis hosting service zoals Vercel of Netlify.
 Gebruik Cloudflare Tunnel voor een gratis, permanente tunnel.
 
 
+

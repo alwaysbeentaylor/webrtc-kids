@@ -1,9 +1,14 @@
+import { getMessaging, getToken, onMessage, type Messaging } from 'firebase/messaging';
+import { firebaseApp } from '../config/firebase';
+
 // Service Worker and Push Notification Service
 class NotificationService {
   private static instance: NotificationService | null = null;
   private registration: ServiceWorkerRegistration | null = null;
   private serviceWorkerReady: boolean = false;
   private keepAliveInterval: ReturnType<typeof setInterval> | null = null;
+  private messaging: Messaging | null = null;
+  private fcmToken: string | null = null;
 
   private constructor() {}
 
@@ -70,9 +75,122 @@ class NotificationService {
 
       // Start keep-alive mechanism
       this.startKeepAlive();
+
+      // Initialize Firebase Cloud Messaging (FCM) for push notifications
+      await this.initializeFCM();
     } catch (error) {
       console.error('❌ Error initializing notifications:', error);
     }
+  }
+
+  private async initializeFCM(): Promise<void> {
+    try {
+      // Check if messaging is supported
+      if (!('Notification' in window) || Notification.permission !== 'granted') {
+        console.warn('⚠️ FCM requires notification permission');
+        return;
+      }
+
+      if (!this.registration) {
+        console.warn('⚠️ Service worker registration required for FCM');
+        return;
+      }
+
+      // Initialize Firebase Messaging
+      this.messaging = getMessaging(firebaseApp);
+      console.log('✅ Firebase Messaging initialized');
+
+      // Get FCM token
+      const token = await getToken(this.messaging, {
+        vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
+        serviceWorkerRegistration: this.registration
+      });
+
+      if (token) {
+        this.fcmToken = token;
+        console.log('✅ FCM token obtained:', token.substring(0, 20) + '...');
+        
+        // Send token to server to store it for this user
+        await this.sendTokenToServer(token);
+        
+        // Listen for foreground messages (when app is open)
+        onMessage(this.messaging, (payload) => {
+          console.log('📬 FCM message received in foreground:', payload);
+          // Show notification even when app is open
+          this.showNotification(
+            payload.notification?.title || 'Nieuwe oproep',
+            {
+              body: payload.notification?.body || 'Je hebt een oproep ontvangen',
+              icon: payload.notification?.icon || '/icon-192.png',
+              data: payload.data || {}
+            }
+          );
+        });
+      } else {
+        console.warn('⚠️ No FCM token available');
+      }
+    } catch (error) {
+      console.error('❌ Error initializing FCM:', error);
+    }
+  }
+
+  private async sendTokenToServer(token: string): Promise<void> {
+    try {
+      // Get current user ID (parent or child)
+      const userId = this.getCurrentUserId();
+      if (!userId) {
+        console.warn('⚠️ No user ID available to send FCM token');
+        return;
+      }
+
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://webrtc-signaling-stg.fly.dev';
+      const response = await fetch(`${backendUrl}/api/fcm-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId,
+          fcmToken: token
+        })
+      });
+
+      if (response.ok) {
+        console.log('✅ FCM token sent to server');
+      } else {
+        console.error('❌ Failed to send FCM token to server:', response.statusText);
+      }
+    } catch (error) {
+      console.error('❌ Error sending FCM token to server:', error);
+    }
+  }
+
+  private getCurrentUserId(): string | null {
+    // Try to get from localStorage (child session)
+    const childSession = localStorage.getItem('childSession');
+    if (childSession) {
+      try {
+        const session = JSON.parse(childSession);
+        return session.userId || null;
+      } catch {
+        return null;
+      }
+    }
+
+    // Try to get from Firebase Auth (parent)
+    // This will be set by the App component
+    return null; // Will be set via setUserId method
+  }
+
+  setUserId(userId: string): void {
+    // If token exists but wasn't sent yet, send it now
+    if (this.fcmToken && userId) {
+      this.sendTokenToServer(this.fcmToken);
+    }
+  }
+
+  getFCMToken(): string | null {
+    return this.fcmToken;
   }
 
   private async setupBackgroundSync(): Promise<void> {

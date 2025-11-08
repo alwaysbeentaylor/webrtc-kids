@@ -255,6 +255,14 @@ function App() {
     notificationService.initialize().catch(console.error);
   }, []);
 
+  // Set user ID for FCM token registration when user logs in
+  useEffect(() => {
+    if (currentUserId) {
+      console.log('📱 Setting user ID for FCM:', currentUserId);
+      notificationService.setUserId(currentUserId);
+    }
+  }, [currentUserId]);
+
   // Check for child session on mount
   useEffect(() => {
     console.log('🔍 Checking for child session in localStorage...');
