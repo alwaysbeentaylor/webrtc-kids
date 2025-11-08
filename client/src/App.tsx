@@ -927,7 +927,6 @@ function App() {
       contactName: webrtcCall.targetUserId, // Will show userId, caller name can be fetched by CallScreen if needed
       remoteRole: undefined as 'parent' | 'child' | undefined
     } : null);
-    } : null);
     
     if (callInfo) {
       return (
