@@ -27,6 +27,14 @@ const getServerUrl = () => {
     return 'http://localhost:4000';
   }
   
+  // PRODUCTION: If VITE_BACKEND_URL is not set in production, show error
+  if (window.location.hostname.includes('vercel.app') || window.location.hostname.includes('railway.app')) {
+    console.error('❌❌❌ VITE_BACKEND_URL is not set! Please set it in Vercel environment variables.');
+    console.error('❌❌❌ Expected: VITE_BACKEND_URL=https://webrtc-kids-production.up.railway.app');
+    // Still try to use Railway URL as fallback, but log the error
+    return 'https://webrtc-kids-production.up.railway.app';
+  }
+  
   // For local network IPs, use HTTP
   const url = `http://${window.location.hostname}:4000`;
   console.log('🌐 Using local network backend:', url);
