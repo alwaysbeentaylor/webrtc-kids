@@ -424,21 +424,20 @@ function App() {
           
           // CRITICAL: Set up event handlers BEFORE connecting
           const handleConnect = async () => {
-            console.log('✅✅✅ Socket connected for user:', userId);
+            console.log('✅✅✅✅✅✅✅ Socket connected for user:', userId);
             setSocketConnected(true);
             
+            // CRITICAL: Initialize WebRTC listeners IMMEDIATELY after connection
+            console.log('🔧🔧🔧 Initializing WebRTC listeners NOW...');
+            webrtcService.initializeListeners();
+            console.log('✅✅✅ WebRTC listeners initialized');
+            
             try {
-              // Join user room and wait for ACK before initializing WebRTC
+              // Join user room and wait for ACK
               await socketService.joinUserRoom();
               console.log('📢 Joined user room for:', userId);
-              
-              // CRITICAL: Initialize WebRTC listeners AFTER room join ACK
-              webrtcService.initializeListeners();
-              console.log('✅ WebRTC listeners initialized');
             } catch (error) {
-              console.error('❌ Failed to join room or initialize WebRTC:', error);
-              // Still try to initialize WebRTC listeners even if room join fails
-              webrtcService.initializeListeners();
+              console.error('❌ Failed to join room:', error);
             }
             
             if (userId) {
