@@ -525,6 +525,11 @@ function App() {
           
           console.log('✅ Socket connect() call completed');
           
+          // CRITICAL: Initialize WebRTC listeners immediately after successful connection
+          console.log('🔧🔧🔧 Initializing WebRTC listeners after connect...');
+          webrtcService.initializeListeners();
+          console.log('✅✅✅ WebRTCService listeners initialized');
+          
           // Room is already joined after auth:ok, but we can call joinUserRoom for confirmation
           // It will resolve immediately if room:joined was already received
           try {
