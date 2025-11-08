@@ -1,6 +1,6 @@
 // Service Worker for Push Notifications and Background Sync
 const CACHE_NAME = 'webrtc-kids-v1';
-const HEARTBEAT_INTERVAL = 30000; // 30 seconds
+const HEARTBEAT_INTERVAL = 60000; // 60 seconds (less frequent to avoid conflicts)
 
 // Keep service worker alive with periodic wake-ups
 let heartbeatInterval = null;

@@ -107,7 +107,7 @@ class NotificationService {
   }
 
   private startKeepAlive(): void {
-    // Send keep-alive message to service worker every 20 seconds
+    // Send keep-alive message to service worker every 60 seconds (less frequent to avoid conflicts)
     if (this.keepAliveInterval) {
       clearInterval(this.keepAliveInterval);
     }
@@ -119,9 +119,9 @@ class NotificationService {
           timestamp: Date.now()
         });
       }
-    }, 20000); // Every 20 seconds
+    }, 60000); // Every 60 seconds (was 20) - less frequent to avoid conflicts with socket
 
-    console.log('✅ Keep-alive started');
+    console.log('✅ Keep-alive started (60s interval)');
   }
 
   async showNotification(title: string, options: NotificationOptions): Promise<void> {
