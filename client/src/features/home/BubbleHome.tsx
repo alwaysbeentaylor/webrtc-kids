@@ -1690,6 +1690,45 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
         ⚙️
       </button>
 
+      {/* Request New Code button for children */}
+      {!isParent && (
+        <button
+          onClick={handleRequestNewCode}
+          style={{
+            position: 'absolute',
+            top: '15px',
+            right: '105px',
+            width: '32px',
+            height: '32px',
+            padding: '0',
+            backgroundColor: 'rgba(255, 152, 0, 0.9)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '50%',
+            cursor: 'pointer',
+            fontSize: '16px',
+            fontWeight: '600',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            transition: 'transform 0.2s, box-shadow 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.1)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+          }}
+          title="Nieuwe code aanvragen"
+        >
+          🔑
+        </button>
+      )}
+
       {/* Logout button - smaller, with arrow */}
       <button
         onClick={handleLogout}
@@ -1726,45 +1765,6 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
       >
         →
       </button>
-
-      {/* Request New Code button for children */}
-      {!isParent && (
-        <button
-          onClick={handleRequestNewCode}
-          style={{
-            position: 'absolute',
-            top: '15px',
-            right: '55px',
-            width: '32px',
-            height: '32px',
-            padding: '0',
-            backgroundColor: 'rgba(255, 152, 0, 0.9)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '50%',
-            cursor: 'pointer',
-            fontSize: '16px',
-            fontWeight: '600',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-            transition: 'transform 0.2s, box-shadow 0.2s',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'scale(1.1)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'scale(1)';
-            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
-          }}
-          title="Nieuwe code aanvragen"
-        >
-          🔑
-        </button>
-      )}
 
       {/* Delete Confirmation Modal */}
       {deleteModal && (
