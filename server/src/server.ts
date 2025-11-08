@@ -413,9 +413,13 @@ io.on('connection', (socket: AuthenticatedSocket) => {
           // Always send FCM push notification as backup, even if socket is connected
           // This ensures notifications work when app is in background or socket is unstable
           const hasFCMToken = fcmTokens.has(data.targetUserId);
+          console.log(`📱 FCM token check for user ${data.targetUserId}: ${hasFCMToken ? 'EXISTS' : 'NOT FOUND'}`);
+          
           if (socketCount === 0) {
             process.stdout.write(`📱 No active socket connection, sending FCM push notification...\n`);
             if (hasFCMToken) {
+              const fcmToken = fcmTokens.get(data.targetUserId);
+              console.log(`📱 Sending FCM push to token: ${fcmToken?.substring(0, 20)}...`);
               sendFCMPush(
                 data.targetUserId,
                 'Nieuwe oproep',
@@ -426,17 +430,22 @@ io.on('connection', (socket: AuthenticatedSocket) => {
                   targetUserId: data.targetUserId,
                   callId: `call-${Date.now()}`
                 }
-              ).catch(err => {
+              ).then(() => {
+                console.log(`✅ FCM push sent successfully to ${data.targetUserId}`);
+              }).catch(err => {
                 console.error('❌ Failed to send FCM push:', err);
               });
             } else {
               process.stdout.write(`⚠️ No FCM token found for user: ${data.targetUserId}\n`);
+              console.log(`⚠️ Available FCM tokens: ${Array.from(fcmTokens.keys()).join(', ')}`);
             }
           } else {
             // Socket is connected, but still send FCM push as backup for background scenarios
             // This helps when app is in background and socket might be slow to deliver
             if (hasFCMToken) {
-              process.stdout.write(`📱 Socket connected but sending FCM push as backup...\n`);
+              process.stdout.write(`📱 Socket connected (${socketCount} sockets) but sending FCM push as backup...\n`);
+              const fcmToken = fcmTokens.get(data.targetUserId);
+              console.log(`📱 Sending backup FCM push to token: ${fcmToken?.substring(0, 20)}...`);
               sendFCMPush(
                 data.targetUserId,
                 'Nieuwe oproep',
@@ -447,9 +456,13 @@ io.on('connection', (socket: AuthenticatedSocket) => {
                   targetUserId: data.targetUserId,
                   callId: `call-${Date.now()}`
                 }
-              ).catch(err => {
+              ).then(() => {
+                console.log(`✅ Backup FCM push sent successfully to ${data.targetUserId}`);
+              }).catch(err => {
                 console.error('❌ Failed to send backup FCM push:', err);
               });
+            } else {
+              console.log(`⚠️ No FCM token for backup push to ${data.targetUserId}`);
             }
           }
           

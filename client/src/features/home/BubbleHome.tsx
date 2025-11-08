@@ -56,8 +56,60 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
       return;
     }
     
-    // Update online status
+    // Update online status when component mounts
     familyService.updateOnlineStatus(currentUserId, true).catch(console.error);
+    
+    // Heartbeat mechanisme: update online status periodically when socket is connected
+    let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+    let offlineTimeout: ReturnType<typeof setTimeout> | null = null;
+    
+    const startHeartbeat = () => {
+      // Clear any existing heartbeat
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+      }
+      
+      // Update online status every 30 seconds when socket is connected
+      heartbeatInterval = setInterval(() => {
+        if (socketService.isConnected()) {
+          familyService.updateOnlineStatus(currentUserId, true).catch(console.error);
+          console.log('💓 Heartbeat: Online status updated');
+        }
+      }, 30000); // Every 30 seconds
+    };
+    
+    const scheduleOffline = () => {
+      // Clear any existing timeout
+      if (offlineTimeout) {
+        clearTimeout(offlineTimeout);
+      }
+      
+      // Schedule offline status after 5 minutes of disconnect
+      offlineTimeout = setTimeout(() => {
+        if (!socketService.isConnected()) {
+          console.log('⏰ 5 minutes passed without connection, setting offline');
+          familyService.updateOnlineStatus(currentUserId, false).catch(console.error);
+        }
+      }, 5 * 60 * 1000); // 5 minutes
+    };
+    
+    // Start heartbeat when socket connects
+    const checkAndStartHeartbeat = () => {
+      if (socketService.isConnected()) {
+        startHeartbeat();
+        // Clear offline timeout if socket is connected
+        if (offlineTimeout) {
+          clearTimeout(offlineTimeout);
+          offlineTimeout = null;
+        }
+      } else {
+        // Schedule offline if socket is not connected
+        scheduleOffline();
+      }
+    };
+    
+    // Check immediately
+    checkAndStartHeartbeat();
     
     // Subscribe to real-time family members updates (including online status)
     console.log('📡 Setting up real-time family members subscription...');
@@ -80,11 +132,47 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
       setLoading(false);
     });
     
-    // Update online status on disconnect
+    // Listen for socket connect/disconnect to manage heartbeat
+    const handleSocketConnect = () => {
+      console.log('✅ Socket connected, starting heartbeat');
+      startHeartbeat();
+      if (offlineTimeout) {
+        clearTimeout(offlineTimeout);
+        offlineTimeout = null;
+      }
+    };
+    
+    const handleSocketDisconnect = () => {
+      console.log('❌ Socket disconnected, scheduling offline status');
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+      }
+      scheduleOffline();
+    };
+    
+    socketService.on('connect', handleSocketConnect);
+    socketService.on('disconnect', handleSocketDisconnect);
+    
+    // Update online status on component unmount (only if socket is disconnected)
     return () => {
       console.log('🧹 Cleaning up family members subscription');
       unsubscribe();
-      familyService.updateOnlineStatus(currentUserId, false).catch(console.error);
+      socketService.off('connect', handleSocketConnect);
+      socketService.off('disconnect', handleSocketDisconnect);
+      
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+      }
+      
+      // Only set offline if socket is disconnected
+      if (!socketService.isConnected()) {
+        // Clear timeout and set offline immediately on unmount if disconnected
+        if (offlineTimeout) {
+          clearTimeout(offlineTimeout);
+        }
+        familyService.updateOnlineStatus(currentUserId, false).catch(console.error);
+      }
     };
   }, [familyId, currentUserId]);
 
@@ -143,14 +231,16 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
         setSocketTransport(transport);
         console.log('📡 Socket transport:', transport);
       }
-      familyService.updateOnlineStatus(currentUserId, true).catch(console.error);
+      // Online status will be updated by heartbeat mechanism
+      // Don't update here to avoid race conditions
       // Real-time subscription will automatically update the UI
     };
     const handleDisconnect = (reason?: string) => {
       console.log('❌ Socket disconnected in BubbleHome:', reason);
       setSocketConnected(false);
       setConnectionError(reason || 'Disconnected');
-      familyService.updateOnlineStatus(currentUserId, false).catch(console.error);
+      // Don't set offline immediately - use timeout instead
+      // Online status will be updated by heartbeat mechanism or timeout
       // Real-time subscription will automatically update the UI
     };
     
@@ -191,7 +281,8 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
       console.log('🔍 Checking socket connection:', connected, 'Backend URL:', backendUrl);
       setSocketConnected(connected);
       if (connected) {
-        familyService.updateOnlineStatus(currentUserId, true).catch(console.error);
+        // Online status will be updated by heartbeat mechanism
+        // Don't update here to avoid race conditions
       } else {
         console.warn('⚠️ Socket is NOT connected. Check browser console for connection errors.');
         console.warn('⚠️ Make sure VITE_BACKEND_URL is set correctly in environment variables (Vercel/Render/etc).');

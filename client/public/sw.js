@@ -3,7 +3,7 @@ importScripts('https://www.gstatic.com/firebasejs/12.5.0/firebase-app-compat.js'
 importScripts('https://www.gstatic.com/firebasejs/12.5.0/firebase-messaging-compat.js');
 
 const CACHE_NAME = 'webrtc-kids-v1';
-const HEARTBEAT_INTERVAL = 60000; // 60 seconds (less frequent to avoid conflicts)
+const HEARTBEAT_INTERVAL = 20000; // 20 seconds (more frequent for better reliability)
 
 // Keep service worker alive with periodic wake-ups
 let heartbeatInterval = null;
@@ -95,13 +95,16 @@ function startHeartbeat() {
 
 // Handle push notifications (from FCM or push service)
 self.addEventListener('push', (event) => {
-  console.log('📬 Push notification received:', event);
+  console.log('📬📬📬 Push notification received:', event);
+  console.log('📬 Push data:', event.data ? event.data.text() : 'No data');
   
   let data = {};
   if (event.data) {
     try {
       data = event.data.json();
+      console.log('📬 Parsed push data:', data);
     } catch (e) {
+      console.log('📬 Push data is not JSON, using text:', event.data.text());
       data = { body: event.data.text() };
     }
   }
@@ -112,6 +115,8 @@ self.addEventListener('push', (event) => {
   const body = notificationData.body || data.body || 'Je hebt een oproep ontvangen';
   const icon = notificationData.icon || data.icon || '/icon-192.png';
   const callData = data.data || {};
+  
+  console.log('📬 Showing notification:', { title, body, callData });
   
   const options = {
     body: body,
@@ -132,14 +137,20 @@ self.addEventListener('push', (event) => {
   };
   
   event.waitUntil(
-    self.registration.showNotification(title, options)
+    self.registration.showNotification(title, options).then(() => {
+      console.log('✅ Notification shown successfully');
+    }).catch((err) => {
+      console.error('❌ Error showing notification:', err);
+    })
   );
 });
 
 // Handle FCM background messages (when app is closed)
 if (messaging) {
   messaging.onBackgroundMessage((payload) => {
-    console.log('📬 FCM background message received:', payload);
+    console.log('📬📬📬 FCM background message received:', payload);
+    console.log('📬 FCM payload notification:', payload.notification);
+    console.log('📬 FCM payload data:', payload.data);
     
     const notificationTitle = payload.notification?.title || 'Nieuwe oproep';
     const notificationOptions = {
@@ -156,8 +167,16 @@ if (messaging) {
       ]
     };
     
-    return self.registration.showNotification(notificationTitle, notificationOptions);
+    console.log('📬 Showing FCM notification:', { notificationTitle, notificationOptions });
+    
+    return self.registration.showNotification(notificationTitle, notificationOptions).then(() => {
+      console.log('✅ FCM notification shown successfully');
+    }).catch((err) => {
+      console.error('❌ Error showing FCM notification:', err);
+    });
   });
+} else {
+  console.warn('⚠️ Firebase Messaging not initialized in service worker');
 }
 
 // Handle notification clicks
