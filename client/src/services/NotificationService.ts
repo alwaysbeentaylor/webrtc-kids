@@ -3,6 +3,7 @@ class NotificationService {
   private static instance: NotificationService | null = null;
   private registration: ServiceWorkerRegistration | null = null;
   private serviceWorkerReady: boolean = false;
+  private keepAliveInterval: ReturnType<typeof setInterval> | null = null;
 
   private constructor() {}
 
@@ -27,7 +28,8 @@ class NotificationService {
     try {
       // Register service worker
       this.registration = await navigator.serviceWorker.register('/sw.js', {
-        scope: '/'
+        scope: '/',
+        updateViaCache: 'none' // Always check for updates
       });
       console.log('✅ Service Worker registered:', this.registration.scope);
 
@@ -36,48 +38,90 @@ class NotificationService {
       this.serviceWorkerReady = true;
       console.log('✅ Service Worker ready');
 
+      // Ensure service worker is active
+      if (this.registration.active) {
+        console.log('✅ Service Worker is active');
+      } else if (this.registration.installing) {
+        await new Promise((resolve) => {
+          this.registration!.installing!.addEventListener('statechange', () => {
+            if (this.registration!.installing!.state === 'activated') {
+              resolve(undefined);
+            }
+          });
+        });
+      }
+
       // Request notification permission (only if not already requested)
       if (Notification.permission === 'default') {
         const permission = await Notification.requestPermission();
         console.log('📱 Notification permission:', permission);
         
         if (permission === 'granted') {
-          // Subscribe to push notifications (for future server-side push)
-          await this.subscribeToPush();
+          await this.setupBackgroundSync();
         } else {
           console.warn('⚠️ Notification permission denied');
         }
       } else {
         console.log('📱 Notification permission already:', Notification.permission);
         if (Notification.permission === 'granted') {
-          await this.subscribeToPush();
+          await this.setupBackgroundSync();
         }
       }
+
+      // Start keep-alive mechanism
+      this.startKeepAlive();
     } catch (error) {
       console.error('❌ Error initializing notifications:', error);
     }
   }
 
-  private async subscribeToPush(): Promise<void> {
-    if (!this.registration) {
-      console.warn('No service worker registration');
-      return;
-    }
+  private async setupBackgroundSync(): Promise<void> {
+    if (!this.registration) return;
 
     try {
-      // Subscribe to push notifications
-      // Note: For production, you'll need a push service (Firebase Cloud Messaging, etc.)
-      // For now, we'll use the service worker to show notifications when app is closed
-      await this.registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: null // Will be set when implementing full push service
-      });
-      console.log('✅ Push subscription created');
+      // Register for background sync (if supported)
+      const registration = this.registration as any;
+      if ('sync' in registration) {
+        try {
+          await registration.sync.register('keep-alive');
+          console.log('✅ Background sync registered');
+        } catch (syncError) {
+          console.warn('⚠️ Background sync registration failed:', syncError);
+        }
+      }
+
+      // Register for periodic background sync (if supported)
+      if ('periodicSync' in registration) {
+        try {
+          await registration.periodicSync.register('keep-alive', {
+            minInterval: 30000 // 30 seconds
+          });
+          console.log('✅ Periodic background sync registered');
+        } catch (periodicError) {
+          console.warn('⚠️ Periodic sync registration failed:', periodicError);
+        }
+      }
     } catch (error) {
-      console.error('❌ Error subscribing to push:', error);
-      // Push subscription might fail if no push service is configured
-      // This is OK - we can still use service worker notifications
+      console.warn('⚠️ Background sync setup failed:', error);
     }
+  }
+
+  private startKeepAlive(): void {
+    // Send keep-alive message to service worker every 20 seconds
+    if (this.keepAliveInterval) {
+      clearInterval(this.keepAliveInterval);
+    }
+
+    this.keepAliveInterval = setInterval(() => {
+      if (this.registration && this.registration.active) {
+        this.registration.active.postMessage({
+          type: 'KEEP_ALIVE',
+          timestamp: Date.now()
+        });
+      }
+    }, 20000); // Every 20 seconds
+
+    console.log('✅ Keep-alive started');
   }
 
   async showNotification(title: string, options: NotificationOptions): Promise<void> {
@@ -103,41 +147,46 @@ class NotificationService {
     }
 
     try {
-      // Try to use service worker notification first (works when app is closed/background)
-      if (this.registration && this.serviceWorkerReady) {
-        // Send message to service worker to show notification
-        // This works even when app is in background
-        if (navigator.serviceWorker.controller) {
-          navigator.serviceWorker.controller.postMessage({
-            type: 'SHOW_NOTIFICATION',
-            title,
-            options
-          });
-          console.log('📤 Message sent to service worker for notification');
+      // Always use service worker notification (works even when app is closed)
+      if (this.registration) {
+        // Ensure service worker is ready
+        if (!this.serviceWorkerReady) {
+          await navigator.serviceWorker.ready;
+          this.serviceWorkerReady = true;
+        }
+
+        // Use service worker to show notification (works in background/closed)
+        const notificationOptions: any = {
+          ...options,
+          requireInteraction: true,
+          tag: options.tag || `notification-${Date.now()}`,
+          badge: '/icon-96.png',
+          icon: options.icon || '/icon-192.png'
+        };
+        
+        // Add vibrate if supported (not in standard NotificationOptions type)
+        if ('vibrate' in Notification.prototype || 'vibrate' in navigator) {
+          notificationOptions.vibrate = [200, 100, 200, 100, 200];
         }
         
-        // Also try direct service worker notification
-        await this.registration.showNotification(title, {
-          ...options,
-          requireInteraction: true
-        });
+        await this.registration.showNotification(title, notificationOptions);
         console.log('✅ Notification shown via service worker');
       } else {
         // Fallback to regular notification (only works when app is open)
         const notification = new Notification(title, options);
         console.log('✅ Notification shown directly');
         
-        // Auto-close after 5 seconds if not clicked
+        // Auto-close after 10 seconds if not clicked
         setTimeout(() => {
           notification.close();
-        }, 5000);
+        }, 10000);
       }
     } catch (error) {
       console.error('❌ Error showing notification:', error);
       // Fallback to regular notification
       try {
         const notification = new Notification(title, options);
-        setTimeout(() => notification.close(), 5000);
+        setTimeout(() => notification.close(), 10000);
       } catch (fallbackError) {
         console.error('❌ Fallback notification also failed:', fallbackError);
       }
@@ -161,7 +210,13 @@ class NotificationService {
   isReady(): boolean {
     return this.serviceWorkerReady && Notification.permission === 'granted';
   }
+
+  cleanup(): void {
+    if (this.keepAliveInterval) {
+      clearInterval(this.keepAliveInterval);
+      this.keepAliveInterval = null;
+    }
+  }
 }
 
 export const notificationService = NotificationService.getInstance();
-
