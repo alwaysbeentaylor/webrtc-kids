@@ -887,6 +887,15 @@ function App() {
   const webrtcCall = webrtcService.getCurrentCall();
   const shouldShowCallScreen = activeCall || (webrtcCall && webrtcCall.direction === 'incoming' && webrtcCall.state === 'ringing');
   
+  console.log('🔍🔍🔍 Call screen check:', {
+    activeCall: !!activeCall,
+    webrtcCall: webrtcCall ? { direction: webrtcCall.direction, state: webrtcCall.state, targetUserId: webrtcCall.targetUserId } : null,
+    shouldShowCallScreen,
+    familyId: !!familyId,
+    currentUserId: !!currentUserId,
+    allConditionsMet: shouldShowCallScreen && !!familyId && !!currentUserId
+  });
+  
   if (shouldShowCallScreen && familyId && currentUserId) {
     // Stop ringtone when call screen is shown
     stopIncomingCallSound();
