@@ -245,22 +245,33 @@ function App() {
 
   // Check for child session on mount
   useEffect(() => {
+    console.log('🔍 Checking for child session in localStorage...');
     const storedSession = localStorage.getItem('childSession');
+    console.log('🔍 Stored session:', storedSession ? 'found' : 'not found');
+    
     if (storedSession) {
       try {
         const session = JSON.parse(storedSession) as ChildSession;
+        console.log('✅ Child session parsed successfully:', {
+          userId: session.userId,
+          childName: session.childName,
+          familyId: session.familyId,
+          role: session.role
+        });
         setChildSession(session);
         setFamilyId(session.familyId);
         setCurrentUserId(session.userId);
         setCurrentUserName(session.childName);
         setIsParent(false);
         setAuthState({ user: null, loading: false, error: null });
+        console.log('✅ Child session state set');
       } catch (e) {
-        console.error('Error parsing child session:', e);
+        console.error('❌ Error parsing child session:', e);
         localStorage.removeItem('childSession');
         setAuthState({ user: null, loading: false, error: null });
       }
     } else {
+      console.log('⚠️ No child session found in localStorage');
       // No child session, wait for Firebase auth
       setAuthState(prev => ({ ...prev, loading: false }));
     }
@@ -730,7 +741,10 @@ function App() {
           <ChildCodeLogin onLoginSuccess={(userId, name, fid, role) => {
             console.log('✅ Child login success:', { userId, name, fid, role });
             if (role === 'child') {
-              setChildSession({ userId, childName: name, familyId: fid, role: 'child' });
+              const newChildSession = { userId, childName: name, familyId: fid, role: 'child' };
+              console.log('💾 Saving child session to localStorage:', newChildSession);
+              localStorage.setItem('childSession', JSON.stringify(newChildSession));
+              setChildSession(newChildSession);
               setFamilyId(fid);
               setCurrentUserId(userId);
               setCurrentUserName(name);
