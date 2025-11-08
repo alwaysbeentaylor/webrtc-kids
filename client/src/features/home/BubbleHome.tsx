@@ -136,7 +136,14 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
     // Check initial connection state
     const checkConnection = () => {
       const connected = socketService.isConnected();
-      console.log('🔍 Checking socket connection:', connected, 'SERVER_URL:', window.location.origin);
+      // Get the actual backend URL from environment or fallback
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+          ? 'http://localhost:4000' 
+          : window.location.hostname.includes('vercel.app') || window.location.hostname.includes('railway.app')
+            ? 'https://webrtc-kids-production.up.railway.app'
+            : `http://${window.location.hostname}:4000`);
+      console.log('🔍 Checking socket connection:', connected, 'Backend URL:', backendUrl);
       setSocketConnected(connected);
       if (connected) {
         familyService.updateOnlineStatus(currentUserId, true).catch(console.error);
@@ -699,9 +706,14 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
                   <strong>Device:</strong> Mobiel ({/Android/i.test(navigator.userAgent) ? 'Android' : /iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'iOS' : 'Mobile'})
                 </p>
               )}
-              <p style={{ margin: '0.5rem 0', color: '#666', fontSize: '0.9rem' }}>
-                <strong>Backend URL:</strong> {import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:4000' : `http://${window.location.hostname}:4000`)}
-              </p>
+               <p style={{ margin: '0.5rem 0', color: '#666', fontSize: '0.9rem' }}>
+                 <strong>Backend URL:</strong> {import.meta.env.VITE_BACKEND_URL || 
+                   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+                     ? 'http://localhost:4000' 
+                     : window.location.hostname.includes('vercel.app') || window.location.hostname.includes('railway.app')
+                       ? 'https://webrtc-kids-production.up.railway.app'
+                       : `http://${window.location.hostname}:4000`)}
+               </p>
               {connectionError && (
                 <div style={{ margin: '0.5rem 0', padding: '0.5rem', backgroundColor: '#ffebee', borderRadius: '4px' }}>
                   <p style={{ margin: 0, color: '#c62828', fontSize: '0.85rem', fontWeight: 'bold' }}>
