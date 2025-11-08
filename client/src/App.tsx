@@ -357,16 +357,23 @@ function App() {
 
   // Connect socket when authenticated
   useEffect(() => {
-    const userId = currentUserId || authState.user?.uid;
+    // Use childSession userId if available, otherwise use currentUserId or authState.user
+    const userId = childSession?.userId || currentUserId || authState.user?.uid;
+    const fid = childSession?.familyId || familyId;
+    
     console.log('🔌 Socket useEffect triggered:', {
       userId,
-      familyId,
+      familyId: fid,
+      currentUserId,
       hasAuthUser: !!authState.user,
+      authUserId: authState.user?.uid,
       hasChildSession: !!childSession,
-      shouldConnect: !!(userId && familyId && (authState.user || childSession))
+      childSessionUserId: childSession?.userId,
+      childSessionFamilyId: childSession?.familyId,
+      shouldConnect: !!(userId && fid && (authState.user || childSession))
     });
     
-    if (userId && familyId && (authState.user || childSession)) {
+    if (userId && fid && (authState.user || childSession)) {
       console.log('🔌🔌🔌 Socket connection conditions met:', {
         userId,
         familyId,
@@ -440,11 +447,15 @@ function App() {
             console.log('🔐🔐🔐 Token getter called:', {
               hasChildSession: !!childSession,
               childSessionUserId: childSession?.userId,
+              childSessionRole: childSession?.role,
               hasAuthUser: !!authState.user,
-              userId: userId
+              authUserId: authState.user?.uid,
+              userId: userId,
+              currentUserId: currentUserId
             });
             
-            if (childSession) {
+            // CRITICAL: Check childSession FIRST before checking authState.user
+            if (childSession && childSession.userId) {
               const childToken = 'child-token-' + childSession.userId;
               console.log('🔐🔐🔐 Generating child token:', {
                 userId: childSession.userId,
@@ -454,13 +465,18 @@ function App() {
               });
               return childToken;
             }
-            const firebaseToken = await firebaseService.getIdToken();
-            if (firebaseToken) {
-              console.log('🔐🔐🔐 Using Firebase token:', {
-                tokenPrefix: firebaseToken.substring(0, 30) + '...'
-              });
-              return firebaseToken;
+            
+            // Only use Firebase token if no child session
+            if (authState.user) {
+              const firebaseToken = await firebaseService.getIdToken();
+              if (firebaseToken) {
+                console.log('🔐🔐🔐 Using Firebase token:', {
+                  tokenPrefix: firebaseToken.substring(0, 30) + '...'
+                });
+                return firebaseToken;
+              }
             }
+            
             // DEV fallback: allow parent dev token when Firebase token not available
             if (import.meta.env.DEV && import.meta.env.VITE_DEV_FAKE_PARENT_AUTH === 'true' && userId) {
               const devParentToken = 'dev-parent-token-' + userId;
