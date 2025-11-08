@@ -214,10 +214,18 @@ class SocketService {
         isMobile
       });
       
+      // Wait a tiny bit to ensure server has registered auth:join listener
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       // Immediately send auth:join event with token
       if (this.socket && this.currentToken) {
         console.log('🔐🔐🔐 Sending auth:join event with token...');
         this.socket.emit('auth:join', { token: this.currentToken });
+      } else {
+        console.error('❌❌❌ Cannot send auth:join - socket or token missing:', {
+          hasSocket: !!this.socket,
+          hasToken: !!this.currentToken
+        });
       }
     });
 
