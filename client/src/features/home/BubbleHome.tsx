@@ -34,6 +34,9 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
   const [isOverDeleteZone, setIsOverDeleteZone] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showConnectionDetails, setShowConnectionDetails] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [socketTransport, setSocketTransport] = useState<string>('unknown');
+  const [isMobile, setIsMobile] = useState(false);
   const [selectedChild, setSelectedChild] = useState<Contact | null>(null);
   const [newCodeForChild, setNewCodeForChild] = useState<{ childId: string; code: string } | null>(null);
   const [welcomeMessage, setWelcomeMessage] = useState<string>('Welkom, mijn familie');
@@ -95,18 +98,40 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
     const handleConnect = () => {
       console.log('✅ Socket connected in BubbleHome');
       setSocketConnected(true);
+      // Get transport info if available
+      const socket = (socketService as any).socket;
+      if (socket?.io?.engine?.transport) {
+        const transport = socket.io.engine.transport.name;
+        setSocketTransport(transport);
+        console.log('📡 Socket transport:', transport);
+      }
       familyService.updateOnlineStatus(currentUserId, true).catch(console.error);
       // Real-time subscription will automatically update the UI
     };
-    const handleDisconnect = () => {
-      console.log('❌ Socket disconnected in BubbleHome');
+    const handleDisconnect = (reason?: string) => {
+      console.log('❌ Socket disconnected in BubbleHome:', reason);
       setSocketConnected(false);
+      setConnectionError(reason || 'Disconnected');
       familyService.updateOnlineStatus(currentUserId, false).catch(console.error);
       // Real-time subscription will automatically update the UI
+    };
+    
+    const handleConnectError = (error: Error) => {
+      console.error('❌ Socket connection error in BubbleHome:', error);
+      setConnectionError(error.message);
+      setSocketConnected(false);
     };
 
     socketService.on('connect', handleConnect);
     socketService.on('disconnect', handleDisconnect);
+    socketService.on('connect_error', handleConnectError);
+    
+    // Detect mobile
+    const checkMobile = () => {
+      const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      setIsMobile(mobile);
+    };
+    checkMobile();
 
     // Check initial connection state
     const checkConnection = () => {
@@ -664,9 +689,26 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
               <p style={{ margin: '0.5rem 0', color: '#666', fontSize: '0.9rem' }}>
                 <strong>Status:</strong> {socketConnected ? '✅ Verbonden' : '❌ Niet verbonden'}
               </p>
+              {socketTransport !== 'unknown' && (
+                <p style={{ margin: '0.5rem 0', color: '#666', fontSize: '0.9rem' }}>
+                  <strong>Transport:</strong> {socketTransport}
+                </p>
+              )}
+              {isMobile && (
+                <p style={{ margin: '0.5rem 0', color: '#666', fontSize: '0.9rem' }}>
+                  <strong>Device:</strong> Mobiel ({/Android/i.test(navigator.userAgent) ? 'Android' : /iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'iOS' : 'Mobile'})
+                </p>
+              )}
               <p style={{ margin: '0.5rem 0', color: '#666', fontSize: '0.9rem' }}>
                 <strong>Backend URL:</strong> {import.meta.env.VITE_BACKEND_URL || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:4000' : `http://${window.location.hostname}:4000`)}
               </p>
+              {connectionError && (
+                <div style={{ margin: '0.5rem 0', padding: '0.5rem', backgroundColor: '#ffebee', borderRadius: '4px' }}>
+                  <p style={{ margin: 0, color: '#c62828', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                    ⚠️ Error: {connectionError}
+                  </p>
+                </div>
+              )}
               {!socketConnected && (
                 <div style={{ margin: '0.5rem 0', color: '#f44336', fontSize: '0.85rem' }}>
                   <p style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>
