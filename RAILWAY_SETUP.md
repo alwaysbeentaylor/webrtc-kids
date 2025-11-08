@@ -32,6 +32,10 @@ Railway is ideaal voor deze WebRTC app omdat:
 3. Railway zal automatisch detecteren:
    - Build command: `npm install && npm run build`
    - Start command: `npm start`
+4. **BELANGRIJK:** Railway gebruikt standaard Node.js v18, maar Firebase vereist Node.js >=20
+   - Het `.nvmrc` bestand in de `server` folder specificeert Node.js 20
+   - Railway zou dit automatisch moeten detecteren
+   - Als het niet werkt, voeg toe aan Railway Variables: `NODE_VERSION=20`
 
 ## Stap 4: Environment Variables instellen
 
