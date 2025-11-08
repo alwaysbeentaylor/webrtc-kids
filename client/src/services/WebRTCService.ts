@@ -127,10 +127,13 @@ class WebRTCService {
   private setupSocketListeners(): void {
     console.log('🔧🔧🔧 WebRTCService: Setting up socket listeners...');
     console.log('🔧 Socket connected:', socketService.isConnected());
+    console.log('🔧 Socket instance exists:', !!(socketService as any).socket);
     
     // Listen for incoming call offers (do NOT auto-answer)
     // We store the offer and switch to 'ringing' so the UI can present Accept/Decline
+    console.log('📞📞📞 REGISTERING call:offer listener in WebRTCService...');
     socketService.on('call:offer', async (data: { fromUserId: string; offer: RTCSessionDescriptionInit; targetUserId: string }) => {
+      console.log('🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨 CALL:OFFER HANDLER TRIGGERED!');
       console.log('📞📞📞📞📞📞📞📞📞 WebRTCService received call:offer event:', {
         fromUserId: data.fromUserId,
         targetUserId: data.targetUserId,
