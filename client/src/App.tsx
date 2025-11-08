@@ -514,8 +514,14 @@ function App() {
               console.warn('⚠️ Using DEV parent token fallback');
               return devParentToken;
             }
-            console.error('❌ No token available for socket connection');
-            return null;
+            
+            // If we have userId but no token, this is an error
+            console.error('❌ No token available for socket connection:', {
+              hasChildSession: !!childSession,
+              hasAuthUser: !!authState.user,
+              userId: userId
+            });
+            throw new Error('No authentication token available. Please log in again.');
           });
           
           console.log('✅ Socket connect() call completed');
