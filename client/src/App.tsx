@@ -573,7 +573,15 @@ function App() {
 
   // Listen for incoming calls - MUST be before all conditional returns
   useEffect(() => {
-            if (!familyId || !currentUserId) return;
+            if (!familyId || !currentUserId) {
+              console.log('⚠️⚠️⚠️ Cannot setup call:offer listener - missing requirements:', {
+                familyId: !!familyId,
+                currentUserId: !!currentUserId
+              });
+              return;
+            }
+
+            console.log('🔧🔧🔧🔧🔧 SETTING UP call:offer listener in App.tsx for user:', currentUserId);
 
             const handleIncomingCall = async (data: { fromUserId: string; offer: any; targetUserId: string }) => {
               console.log('📞📞📞📞📞 INCOMING CALL DETECTED in App.tsx:', {
@@ -581,7 +589,8 @@ function App() {
                 targetUserId: data.targetUserId,
                 currentUserId: currentUserId,
                 match: data.targetUserId === currentUserId,
-                hasOffer: !!data.offer
+                hasOffer: !!data.offer,
+                socketConnected: socketService.isConnected()
               });
               
               // Check if this call is for us
@@ -660,7 +669,9 @@ function App() {
             };
 
             console.log('👂👂👂👂👂 Setting up call:offer listener for user:', currentUserId);
+            console.log('👂 Socket connected:', socketService.isConnected());
             socketService.on('call:offer', handleIncomingCall);
+            console.log('✅✅✅ call:offer listener registered in App.tsx');
             
             // Also log when socket receives ANY event
             socketService.on('connect', () => {

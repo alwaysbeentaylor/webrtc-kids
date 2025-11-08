@@ -38,6 +38,7 @@ class WebRTCService {
   private iceConnectionStateHistory: string[] = [];
   private iceGatheringTimeout: ReturnType<typeof setTimeout> | null = null;
   private connectionRecoveryTimeout: ReturnType<typeof setTimeout> | null = null;
+  private autoAnswer: boolean = false;
 
   // STUN/TURN servers - TURN servers zijn essentieel voor Android NAT traversal
   // Android heeft vaak restrictievere NAT/firewall settings dan iOS
@@ -95,6 +96,17 @@ class WebRTCService {
   private constructor() {
     // Don't setup listeners immediately - wait for socket to be ready
     // This will be called when socket connects
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlFlag = params.get('aa');
+      const storedFlag = localStorage.getItem('auto_answer');
+      this.autoAnswer = urlFlag === '1' || storedFlag === '1';
+      if (this.autoAnswer) {
+        console.log('⚙️ Auto-answer is ENABLED (aa=1 or localStorage auto_answer=1)');
+      }
+    } catch {
+      // ignore
+    }
   }
 
   static getInstance(): WebRTCService {
@@ -114,6 +126,7 @@ class WebRTCService {
 
   private setupSocketListeners(): void {
     console.log('🔧🔧🔧 WebRTCService: Setting up socket listeners...');
+    console.log('🔧 Socket connected:', socketService.isConnected());
     
     // Listen for incoming call offers (do NOT auto-answer)
     // We store the offer and switch to 'ringing' so the UI can present Accept/Decline
@@ -145,6 +158,19 @@ class WebRTCService {
         direction: 'incoming'
       };
       this.notifyCallStateChange('ringing');
+      
+      console.log('✅✅✅✅✅ WebRTCService: Call state set to RINGING, notifying UI...');
+
+      // Temporary diagnostic: auto-accept if enabled (child device can set ?aa=1 or localStorage)
+      if (this.autoAnswer) {
+        console.log('⚙️ Auto-answer enabled: accepting incoming call automatically in 300ms');
+        setTimeout(() => {
+          // Assume local role is child when auto-answering; remote role will be resolved later
+          this.acceptCall('child', 'parent').catch((e) => {
+            console.error('❌ Auto-answer failed:', e);
+          });
+        }, 300);
+      }
     });
 
     // Listen for call answers
