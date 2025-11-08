@@ -10,7 +10,7 @@ import { EmailVerificationPrompt } from './features/auth/EmailVerificationPrompt
 import { BubbleHome } from './features/home/BubbleHome';
 import { CallScreen } from './features/call/CallScreen';
 
-console.log('🚀 Build version:', '2025-11-08T16:30:00Z');
+console.log('🚀 Build version:', new Date().toISOString());
 
 // Determine server URL based on environment
 // On mobile/other devices, use the computer's IP address instead of localhost
@@ -883,24 +883,51 @@ function App() {
     );
   }
 
-  // Show call screen if active call
-  if (activeCall && familyId && currentUserId) {
+  // Show call screen if active call OR if WebRTCService has an incoming call
+  const webrtcCall = webrtcService.getCurrentCall();
+  const shouldShowCallScreen = activeCall || (webrtcCall && webrtcCall.direction === 'incoming' && webrtcCall.state === 'ringing');
+  
+  // State to store caller name for WebRTC calls
+  const [webrtcCallerName, setWebrtcCallerName] = useState<string | null>(null);
+  
+  // Fetch caller name when WebRTC call is detected
+  useEffect(() => {
+    if (webrtcCall && webrtcCall.direction === 'incoming' && webrtcCall.state === 'ringing' && !webrtcCallerName) {
+      familyService.getUserInfo(webrtcCall.targetUserId).then(info => {
+        setWebrtcCallerName(info?.displayName || webrtcCall.targetUserId);
+      }).catch(() => {
+        setWebrtcCallerName(webrtcCall.targetUserId);
+      });
+    }
+  }, [webrtcCall, webrtcCallerName]);
+  
+  if (shouldShowCallScreen && familyId && currentUserId) {
     // Stop ringtone when call screen is shown
     stopIncomingCallSound();
     
-    return (
-      <CallScreen
-        targetUserId={activeCall.contactId}
-        targetUserName={activeCall.contactName}
-        isParent={isParent}
-        remoteRole={activeCall.remoteRole}
-        onEndCall={() => {
-          setActiveCall(null);
-          webrtcService.endCall();
-          stopIncomingCallSound();
-        }}
-      />
-    );
+    // Determine call info from activeCall or webrtcCall
+    const callInfo = activeCall || (webrtcCall ? {
+      contactId: webrtcCall.targetUserId,
+      contactName: webrtcCallerName || webrtcCall.targetUserId,
+      remoteRole: undefined as 'parent' | 'child' | undefined
+    } : null);
+    
+    if (callInfo) {
+      return (
+        <CallScreen
+          targetUserId={callInfo.contactId}
+          targetUserName={callInfo.contactName}
+          isParent={isParent}
+          remoteRole={callInfo.remoteRole}
+          onEndCall={() => {
+            setActiveCall(null);
+            setWebrtcCallerName(null);
+            webrtcService.endCall();
+            stopIncomingCallSound();
+          }}
+        />
+      );
+    }
   }
 
   // Show main app (BubbleHome)
