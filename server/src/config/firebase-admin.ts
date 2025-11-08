@@ -167,18 +167,34 @@ export async function verifyIdToken(idToken: string): Promise<admin.auth.Decoded
       throw new Error('Firebase Admin SDK not initialized');
     }
     
+    // Log which project we're using
+    const projectId = firebaseAdmin.options.projectId || 'unknown';
+    console.log('🔍 Verifying token with Firebase project:', projectId);
+    
     const decodedToken = await firebaseAdmin.auth().verifyIdToken(idToken);
+    console.log('✅ Token verified successfully for user:', decodedToken.uid);
     return decodedToken;
   } catch (error) {
     // Log more details about the error
-    console.error('❌ Firebase token verification error:', error);
+    const projectId = firebaseAdmin?.options.projectId || 'unknown';
+    console.error('❌ Firebase token verification error:', {
+      projectId: projectId,
+      error: error instanceof Error ? error.message : String(error),
+      errorName: error instanceof Error ? error.name : 'Unknown',
+      tokenPrefix: idToken.substring(0, 50) + '...'
+    });
+    
     if (error instanceof Error) {
-      console.error('❌ Error message:', error.message);
-      console.error('❌ Error name:', error.name);
-      if (error.stack) {
-        console.error('❌ Error stack:', error.stack);
+      // Check for specific Firebase errors
+      if (error.message.includes('expired')) {
+        console.error('❌ Token is expired');
+      } else if (error.message.includes('invalid')) {
+        console.error('❌ Token is invalid - may be from different Firebase project');
+      } else if (error.message.includes('project')) {
+        console.error('❌ Project mismatch - token may be from different Firebase project');
       }
     }
+    
     throw new Error(`Invalid or expired token: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
