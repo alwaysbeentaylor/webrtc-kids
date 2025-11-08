@@ -263,6 +263,27 @@ function App() {
     }
   }, [currentUserId]);
 
+  // Pre-request media permissions when user logs in (so browser remembers permission)
+  useEffect(() => {
+    if (currentUserId && familyId) {
+      console.log('🎥 Pre-requesting media permissions for better UX...');
+      // Request media permissions early so browser remembers them
+      // This prevents asking permission every time a call starts
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+          .then((stream) => {
+            console.log('✅ Media permissions granted - browser will remember this');
+            // Stop the stream immediately - we just wanted permission
+            stream.getTracks().forEach(track => track.stop());
+          })
+          .catch((error) => {
+            console.log('⚠️ Media permissions not granted yet:', error.name);
+            // This is OK - user will be asked when they start a call
+          });
+      }
+    }
+  }, [currentUserId, familyId]);
+
   // Check for child session on mount
   useEffect(() => {
     console.log('🔍 Checking for child session in localStorage...');

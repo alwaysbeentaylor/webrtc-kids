@@ -56,21 +56,11 @@ class NotificationService {
         });
       }
 
-      // Request notification permission (only if not already requested)
-      if (Notification.permission === 'default') {
-        const permission = await Notification.requestPermission();
-        console.log('📱 Notification permission:', permission);
-        
-        if (permission === 'granted') {
-          await this.setupBackgroundSync();
-        } else {
-          console.warn('⚠️ Notification permission denied');
-        }
-      } else {
-        console.log('📱 Notification permission already:', Notification.permission);
-        if (Notification.permission === 'granted') {
-          await this.setupBackgroundSync();
-        }
+      // Don't auto-request permission on iOS - requires user gesture
+      // Permission will be requested via explicit button click
+      console.log('📱 Notification permission status:', Notification.permission);
+      if (Notification.permission === 'granted') {
+        await this.setupBackgroundSync();
       }
 
       // Start keep-alive mechanism
@@ -191,6 +181,30 @@ class NotificationService {
 
   getFCMToken(): string | null {
     return this.fcmToken;
+  }
+
+  // Explicitly request notification permission (for iOS - must be called from user gesture)
+  async requestNotificationPermission(): Promise<NotificationPermission> {
+    if (!('Notification' in window)) {
+      console.warn('Notifications not supported');
+      return 'denied';
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      console.log('📱 Notification permission requested:', permission);
+      
+      if (permission === 'granted') {
+        await this.setupBackgroundSync();
+        // Initialize FCM if permission was just granted
+        await this.initializeFCM();
+      }
+      
+      return permission;
+    } catch (error) {
+      console.error('❌ Error requesting notification permission:', error);
+      return 'denied';
+    }
   }
 
   private async setupBackgroundSync(): Promise<void> {

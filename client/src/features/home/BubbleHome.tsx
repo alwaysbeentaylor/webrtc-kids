@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { familyService } from '../../services/FamilyService';
 import { firebaseService } from '../../services/FirebaseService';
 import { socketService } from '../../services/SocketService';
+import { notificationService } from '../../services/NotificationService';
 import { ChildCodeGenerator } from '../family/ChildCodeGenerator';
 
 export interface Contact {
@@ -2231,6 +2232,65 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
                     <span>➕</span>
                     <span>Kind toevoegen</span>
                   </button>
+                  
+                  {/* Enable Notifications Button (for iOS) */}
+                  {('Notification' in window) && Notification.permission !== 'granted' && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const permission = await notificationService.requestNotificationPermission();
+                          if (permission === 'granted') {
+                            alert('✅ Notificaties zijn ingeschakeld! Je ontvangt nu push notificaties voor oproepen.');
+                          } else if (permission === 'denied') {
+                            alert('⚠️ Notificaties zijn geweigerd. Ga naar Instellingen > [App naam] > Notificaties om dit later aan te passen.');
+                          }
+                        } catch (error) {
+                          console.error('Error requesting notification permission:', error);
+                          alert('Kon notificatie toestemming niet aanvragen. Probeer het opnieuw.');
+                        }
+                      }}
+                      style={{
+                        padding: '12px 20px',
+                        backgroundColor: '#4CAF50',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        transition: 'background-color 0.2s',
+                        textAlign: 'left',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#45a049';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#4CAF50';
+                      }}
+                    >
+                      <span>🔔</span>
+                      <span>Notificaties Inschakelen</span>
+                    </button>
+                  )}
+
+                  {/* Notification Status */}
+                  {('Notification' in window) && Notification.permission === 'granted' && (
+                    <div style={{
+                      padding: '12px 20px',
+                      backgroundColor: '#e8f5e9',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      color: '#2e7d32',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px'
+                    }}>
+                      ✅ Notificaties zijn ingeschakeld
+                    </div>
+                  )}
                   
                   <button
                     onClick={handleLogout}
