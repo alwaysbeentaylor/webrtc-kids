@@ -248,6 +248,118 @@ Update je frontend (Vercel) environment variable:
 VITE_BACKEND_URL=https://jouw-railway-app.up.railway.app
 ```
 
+**Hoe je je Railway URL vindt:**
+1. Ga naar Railway dashboard → je service
+2. Klik op "Settings" → "Networking"
+3. Kopieer de "Public Domain" URL (bijvoorbeeld: `https://jouw-app.up.railway.app`)
+
+**In Vercel:**
+1. Ga naar je Vercel project → "Settings" → "Environment Variables"
+2. Zoek `VITE_BACKEND_URL` of maak een nieuwe aan
+3. Zet de waarde naar je Railway URL (bijvoorbeeld: `https://jouw-app.up.railway.app`)
+4. Klik "Save"
+5. Vercel zal automatisch redeployen
+
+## Stap 7: Testen
+
+### Test 1: Check Railway Logs
+
+1. Ga naar Railway dashboard → je service → **"Logs"** tab
+2. Je zou moeten zien:
+   ```
+   ✅ Firebase Admin initialized with FIREBASE_SERVICE_ACCOUNT
+   🚀 Starting server...
+   ✅ Signaling server listening on port 4000
+   ```
+3. Als je errors ziet, check de troubleshooting sectie hieronder
+
+### Test 2: Test Server Bereikbaarheid
+
+1. Open je browser en ga naar: `https://jouw-railway-app.up.railway.app`
+2. Je zou een error moeten zien (dat is normaal - de server heeft geen root endpoint)
+3. Of test met curl in terminal:
+   ```bash
+   curl https://jouw-railway-app.up.railway.app
+   ```
+4. Je zou een error moeten krijgen, maar geen "connection refused" - dat betekent dat de server draait
+
+### Test 3: Test Socket.IO Verbinding
+
+1. Open je frontend app (Vercel)
+2. Open browser Developer Tools (F12) → Console tab
+3. Log in met een account
+4. Je zou moeten zien:
+   ```
+   🌐 Using VITE_BACKEND_URL: https://jouw-railway-app.up.railway.app
+   🔌 Connecting to socket server...
+   ✅ Socket connected successfully
+   ```
+5. Als je errors ziet over CORS of connection, check:
+   - `CLIENT_ORIGIN` in Railway variables komt overeen met je Vercel URL
+   - `VITE_BACKEND_URL` in Vercel komt overeen met je Railway URL
+
+### Test 4: Test WebRTC Call
+
+1. Open je app op twee verschillende devices (of twee browser tabs)
+2. Log in met twee verschillende accounts
+3. Start een call van device 1 naar device 2
+4. Accepteer de call op device 2
+5. Check of:
+   - Audio/video werkt
+   - Verbinding stabiel is
+   - Geen errors in console
+
+### Test 5: Check Railway Metrics
+
+1. Ga naar Railway dashboard → je service → **"Metrics"** tab
+2. Check:
+   - CPU usage (zou laag moeten zijn als er geen actieve calls zijn)
+   - Memory usage
+   - Network traffic
+3. Als je hoge CPU/memory ziet zonder actieve calls, kan er een probleem zijn
+
+## Troubleshooting
+
+**Server start niet:**
+- Check Railway logs voor errors
+- Check of alle environment variables correct zijn ingesteld
+- Check of `NIXPACKS_NO_INSTALL_DEV=false` is ingesteld
+- Check of `NODE_VERSION=20` is ingesteld
+
+**Socket.IO verbindt niet:**
+- Check of `CLIENT_ORIGIN` exact overeenkomt met je Vercel URL (geen trailing slash)
+- Check of `VITE_BACKEND_URL` correct is ingesteld in Vercel
+- Check browser console voor CORS errors
+- Check Railway logs voor connection errors
+
+**Firebase errors:**
+- Check of `FIREBASE_SERVICE_ACCOUNT` correct is gezet (volledige JSON)
+- Check Railway logs voor Firebase initialization errors
+- Check of Firebase project ID correct is
+
+**Calls werken niet:**
+- Check browser console voor WebRTC errors
+- Check Railway logs voor signaling errors
+- Test met twee verschillende devices (niet twee tabs op dezelfde browser)
+- Check of beide devices toegang hebben tot camera/microfoon
+
+## Monitoring
+
+**Railway Dashboard:**
+- Logs: Real-time server logs
+- Metrics: CPU, Memory, Network usage
+- Deployments: Deployment history en status
+
+**Browser Console:**
+- Socket.IO connection status
+- WebRTC connection status
+- Errors en warnings
+
+**Vercel Dashboard:**
+- Frontend deployment status
+- Environment variables
+- Build logs
+
 ## Stap 7: Monitoring
 
 Railway heeft ingebouwde monitoring:
