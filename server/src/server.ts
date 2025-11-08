@@ -4,7 +4,7 @@ import https from 'https';
 import http from 'http';
 import cors from 'cors';
 import { Server as SocketIOServer } from 'socket.io';
-import { authenticateSocket, AuthenticatedSocket } from './auth/socketAuth';
+import { AuthenticatedSocket } from './auth/socketAuth';
 import fs from 'fs';
 import path from 'path';
 
@@ -133,120 +133,125 @@ const io = new SocketIOServer(server, {
   transports: ['websocket', 'polling'] // Allow both transports
 });
 
-// Authentication middleware for socket connections
-io.use(async (socket: AuthenticatedSocket, next) => {
-  // FORCE LOG to console - use both console.log and process.stdout for maximum visibility
-  console.log('\n\n🔍🔍🔍 ========== MIDDLEWARE CALLED ==========');
-  console.log(`🔍 Socket ID: ${socket.id}`);
-  console.log(`🔍 AUTH:`, socket.handshake.auth);
-  console.log(`🔍 QUERY:`, socket.handshake.query);
-  
-  process.stdout.write('\n\n🔍🔍🔍 ========== MIDDLEWARE CALLED ==========\n');
-  process.stdout.write(`🔍 Socket ID: ${socket.id}\n`);
-  process.stdout.write(`🔍 AUTH: ${JSON.stringify(socket.handshake.auth)}\n`);
-  process.stdout.write(`🔍 QUERY: ${JSON.stringify(socket.handshake.query)}\n`);
-  
-  // Get token from anywhere - try ALL possible locations
-  const auth = socket.handshake.auth;
-  const query = socket.handshake.query;
-  
-  let token: string | undefined = undefined;
-  
-  // Method 1: auth.token (object property)
-  if (auth && typeof auth === 'object' && auth !== null) {
-    if ('token' in auth) {
-      token = String((auth as any).token);
-      console.log(`✅✅✅ Token from auth.token: ${token}`);
-      process.stdout.write(`✅✅✅ Token from auth.token: ${token}\n`);
-    }
-  }
-  
-  // Method 2: auth as string
-  if (!token && typeof auth === 'string') {
-    token = auth;
-    console.log(`✅✅✅ Token from auth (string): ${token}`);
-    process.stdout.write(`✅✅✅ Token from auth (string): ${token}\n`);
-  }
-  
-  // Method 3: query.token
-  if (!token && query) {
-    if ('token' in query) {
-      const qToken = query.token;
-      token = Array.isArray(qToken) ? String(qToken[0]) : String(qToken);
-      console.log(`✅✅✅ Token from query.token: ${token}`);
-      process.stdout.write(`✅✅✅ Token from query.token: ${token}\n`);
-    }
-  }
-  
-  console.log(`🔐🔐🔐 FINAL TOKEN: ${token || 'UNDEFINED'}`);
-  console.log(`🔐🔐🔐 Token length: ${token ? token.length : 0}`);
-  console.log(`🔐🔐🔐 Token type: ${typeof token}`);
-  console.log(`🔐🔐🔐 Starts with child-token-: ${token ? token.startsWith('child-token-') : false}`);
-  if (token && typeof token === 'string') {
-    console.log(`🔐🔐🔐 Token first 50 chars: ${token.substring(0, 50)}`);
-  }
-  
-  process.stdout.write(`🔐🔐🔐 FINAL TOKEN: ${token || 'UNDEFINED'}\n`);
-  process.stdout.write(`🔐🔐🔐 Token length: ${token ? token.length : 0}\n`);
-  process.stdout.write(`🔐🔐🔐 Token type: ${typeof token}\n`);
-  process.stdout.write(`🔐🔐🔐 Starts with child-token-: ${token ? token.startsWith('child-token-') : false}\n`);
-  if (token && typeof token === 'string') {
-    process.stdout.write(`🔐🔐🔐 Token first 50 chars: ${token.substring(0, 50)}\n`);
-  }
-  
-  // CRITICAL: If it's a child token, accept IMMEDIATELY without any checks
-  if (token && typeof token === 'string' && token.startsWith('child-token-')) {
-    const userId = token.replace('child-token-', '').trim();
-    console.log(`🔐🔐🔐 Extracted userId from child token: ${userId}`);
-    process.stdout.write(`🔐🔐🔐 Extracted userId from child token: ${userId}\n`);
-    if (userId && userId.length > 0) {
-      socket.userId = userId;
-      socket.userRole = 'child';
-      console.log(`✅✅✅✅✅✅✅✅✅ CHILD ACCEPTED: ${socket.id}, User: ${userId}`);
-      process.stdout.write(`✅✅✅✅✅✅✅✅✅ CHILD ACCEPTED: ${socket.id}, User: ${userId}\n`);
-      return next(); // Accept immediately!
-    } else {
-      console.log(`❌❌❌ Child token has empty userId after extraction`);
-      process.stdout.write(`❌❌❌ Child token has empty userId after extraction\n`);
-    }
-  } else {
-    console.log(`❌❌❌ Token does NOT start with child-token-. Token: ${token ? token.substring(0, 50) : 'UNDEFINED'}`);
-    process.stdout.write(`❌❌❌ Token does NOT start with child-token-. Token: ${token ? token.substring(0, 50) : 'UNDEFINED'}\n`);
-  }
-  
-  // DEV ONLY: Accept parent dev token without Firebase (for local testing), gated by env
-  if (
-    process.env.NODE_ENV !== 'production' &&
-    process.env.DEV_FAKE_PARENT_AUTH === 'true' &&
-    token && typeof token === 'string' && token.startsWith('dev-parent-token-')
-  ) {
-    const userId = token.replace('dev-parent-token-', '').trim();
-    if (userId && userId.length > 0) {
-      socket.userId = userId;
-      socket.userRole = 'parent';
-      process.stdout.write(`✅✅✅ DEV PARENT ACCEPTED: ${socket.id}, User: ${userId}\n`);
-      return next();
-    }
-  }
-  
-  // For parents, use normal authentication
-  try {
-    const authenticated = await authenticateSocket(socket);
-    if (authenticated) {
-      process.stdout.write('✅ PARENT AUTH SUCCESS\n');
-      next();
-    } else {
-      process.stdout.write('❌ AUTH FAILED - rejecting\n');
-      next(new Error('Authentication failed'));
-    }
-  } catch (error) {
-    process.stdout.write(`❌ AUTH EXCEPTION: ${error}\n`);
-    next(new Error('Authentication failed'));
-  }
-});
+// Authentication middleware DISABLED - using event-based auth instead
+// io.use(async (socket: AuthenticatedSocket, next) => {
+//   ... middleware code disabled ...
+// });
 
 io.on('connection', (socket: AuthenticatedSocket) => {
-  console.log('✅✅✅ NEW SOCKET CONNECTION:', socket.id, 'User:', socket.userId, 'Role:', socket.userRole);
+  console.log('🔌🔌🔌 NEW SOCKET CONNECTION (unauthenticated):', socket.id);
+  
+  // Set up 5 second auth timeout
+  const authTimeout = setTimeout(() => {
+    if (!socket.userId) {
+      console.log(`⏰⏰⏰ Auth timeout for socket ${socket.id} - disconnecting`);
+      socket.emit('auth:error', { message: 'Authentication timeout' });
+      socket.disconnect();
+    }
+  }, 5000);
+  
+  // Event-based authentication handler
+  socket.on('auth:join', async (data: { token: string }) => {
+    console.log('🔐🔐🔐 AUTH:JOIN received from socket:', socket.id);
+    console.log('🔐 Token:', data.token ? data.token.substring(0, 50) + '...' : 'UNDEFINED');
+    
+    const token = data.token;
+    
+    if (!token || typeof token !== 'string') {
+      console.log('❌❌❌ Invalid token format');
+      socket.emit('auth:error', { message: 'Invalid token format' });
+      clearTimeout(authTimeout);
+      socket.disconnect();
+      return;
+    }
+    
+    // Handle child tokens
+    if (token.startsWith('child-token-')) {
+      const userId = token.replace('child-token-', '').trim();
+      console.log('🔐🔐🔐 Child token detected, userId:', userId);
+      
+      if (userId && userId.length > 0) {
+        socket.userId = userId;
+        socket.userRole = 'child';
+        clearTimeout(authTimeout);
+        
+        // Join user room immediately
+        const room = `user:${userId}`;
+        socket.join(room);
+        console.log('✅✅✅✅✅✅✅✅✅ CHILD ACCEPTED:', socket.id, 'User:', userId, 'Room:', room);
+        
+        socket.emit('auth:ok', { userId, role: 'child' });
+        socket.emit('room:joined', { room, userId });
+        
+        // Log all rooms after join
+        setTimeout(() => {
+          const allRooms = Array.from(io.sockets.adapter.rooms.keys());
+          console.log('📋 Rooms after child auth:', allRooms);
+        }, 100);
+        return;
+      } else {
+        console.log('❌❌❌ Child token has empty userId');
+        socket.emit('auth:error', { message: 'Invalid child token' });
+        clearTimeout(authTimeout);
+        socket.disconnect();
+        return;
+      }
+    }
+    
+    // Handle dev parent tokens (DEV only)
+    if (
+      process.env.NODE_ENV !== 'production' &&
+      process.env.DEV_FAKE_PARENT_AUTH === 'true' &&
+      token.startsWith('dev-parent-token-')
+    ) {
+      const userId = token.replace('dev-parent-token-', '').trim();
+      if (userId && userId.length > 0) {
+        socket.userId = userId;
+        socket.userRole = 'parent';
+        clearTimeout(authTimeout);
+        
+        const room = `user:${userId}`;
+        socket.join(room);
+        console.log('✅✅✅ DEV PARENT ACCEPTED:', socket.id, 'User:', userId);
+        
+        socket.emit('auth:ok', { userId, role: 'parent' });
+        socket.emit('room:joined', { room, userId });
+        return;
+      }
+    }
+    
+    // Handle Firebase tokens (parents)
+    try {
+      console.log('🔐🔐🔐 Verifying Firebase token...');
+      const { verifyIdToken } = await import('./config/firebase-admin');
+      const decodedToken = await verifyIdToken(token);
+      
+      socket.userId = decodedToken.uid;
+      socket.userRole = 'parent';
+      if (decodedToken.email) {
+        socket.email = decodedToken.email;
+      }
+      
+      clearTimeout(authTimeout);
+      
+      const room = `user:${socket.userId}`;
+      socket.join(room);
+      console.log('✅✅✅ PARENT AUTH SUCCESS:', socket.id, 'User:', socket.userId, 'Room:', room);
+      
+      socket.emit('auth:ok', { userId: socket.userId, role: 'parent' });
+      socket.emit('room:joined', { room, userId: socket.userId });
+      
+      setTimeout(() => {
+        const allRooms = Array.from(io.sockets.adapter.rooms.keys());
+        console.log('📋 Rooms after parent auth:', allRooms);
+      }, 100);
+    } catch (error) {
+      console.log('❌❌❌ Firebase auth exception:', error);
+      socket.emit('auth:error', { message: 'Authentication failed' });
+      clearTimeout(authTimeout);
+      socket.disconnect();
+    }
+  });
   
   // Log all rooms immediately after connection
   setTimeout(() => {
@@ -254,14 +259,27 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     console.log('📋 Rooms after connection:', allRooms);
   }, 1000);
 
-  // Ping/pong test
+  // Helper function to check if socket is authenticated
+  const requireAuth = (handler: () => void) => {
+    if (!socket.userId) {
+      console.warn('⚠️ Unauthenticated socket attempted to use protected event:', socket.id);
+      socket.emit('auth:error', { message: 'Authentication required' });
+      return;
+    }
+    handler();
+  };
+
+  // Ping/pong test (protected)
   socket.on('ping', (payload) => {
-    console.log('ping from authenticated client:', socket.userId, payload);
-    socket.emit('pong', { at: Date.now(), userId: socket.userId });
+    requireAuth(() => {
+      console.log('ping from authenticated client:', socket.userId, payload);
+      socket.emit('pong', { at: Date.now(), userId: socket.userId });
+    });
   });
 
-  // WebRTC signaling events (will be expanded later)
+  // WebRTC signaling events (protected)
   socket.on('call:offer', (data) => {
+    requireAuth(() => {
     process.stdout.write('\n\n📞📞📞 ========== CALL OFFER RECEIVED ==========\n');
     process.stdout.write(`📞 From: ${socket.userId} (socket: ${socket.id})\n`);
     process.stdout.write(`📞 To: ${data.targetUserId}\n`);
@@ -320,9 +338,11 @@ io.on('connection', (socket: AuthenticatedSocket) => {
           process.stdout.write(`📤 Sockets in room: ${socketCount}\n`);
           
           process.stdout.write(`✅✅✅ Call offer forwarded to: ${targetRoom}\n\n`);
+    });
   });
 
   socket.on('call:answer', (data) => {
+    requireAuth(() => {
     process.stdout.write('\n\n📞📞📞 ========== CALL ANSWER RECEIVED ==========\n');
     process.stdout.write(`📞 From: ${socket.userId} (socket: ${socket.id})\n`);
     process.stdout.write(`📞 To: ${data.targetUserId}\n`);
@@ -338,9 +358,11 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     });
     
     process.stdout.write(`✅✅✅ Answer forwarded\n\n`);
+    });
   });
 
   socket.on('call:ice-candidate', (data) => {
+    requireAuth(() => {
     // Forward ICE candidate with detailed logging
     const candidateString = data.candidate?.candidate || '';
     const candidateType = candidateString.includes('typ relay') ? 'relay' : 
@@ -369,9 +391,11 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     });
     
     console.log(`✅ ICE candidate forwarded to ${targetRoom} (type: ${candidateType})`);
+    });
   });
 
   socket.on('call:end', (data) => {
+    requireAuth(() => {
     console.log('Call end from:', socket.userId, 'to:', data.targetUserId);
     // Only parents can end calls (will be enforced by userRole check later)
     if (socket.userRole === 'parent') {
@@ -381,45 +405,52 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     } else {
       socket.emit('error', { message: 'Only parents can end calls' });
     }
+    });
   });
 
   socket.on('call:cancel', (data) => {
+    requireAuth(() => {
     console.log('Call cancel from:', socket.userId, 'to:', data.targetUserId);
     // Forward cancel signal immediately (no role check needed for cancel)
     io.to(`user:${data.targetUserId}`).emit('call:cancel', {
       fromUserId: socket.userId
     });
+    });
   });
 
   socket.on('call:hangup', (data) => {
+    requireAuth(() => {
     console.log('Call hangup from:', socket.userId, 'to:', data.targetUserId);
     // Forward hangup signal immediately (no role check needed - permissions handled client-side)
     io.to(`user:${data.targetUserId}`).emit('call:hangup', {
       fromUserId: socket.userId
     });
+    });
   });
 
-          // Join user room for targeted messaging
-          socket.on('join:user-room', () => {
-            if (socket.userId) {
-              const room = `user:${socket.userId}`;
-              socket.join(room);
-              console.log('✅ User joined their room:', socket.userId, 'Room:', room);
-              console.log('✅ Socket rooms after join:', Array.from(socket.rooms));
+  // Join user room (protected - but should already be joined after auth)
+  socket.on('join:user-room', () => {
+    requireAuth(() => {
+      if (socket.userId) {
+        const room = `user:${socket.userId}`;
+        socket.join(room);
+        console.log('✅ User joined their room:', socket.userId, 'Room:', room);
+        console.log('✅ Socket rooms after join:', Array.from(socket.rooms));
 
-              // Emit confirmation back to client
-              socket.emit('room:joined', { room, userId: socket.userId });
+        // Emit confirmation back to client
+        socket.emit('room:joined', { room, userId: socket.userId });
 
-              // Log all active rooms for debugging
-              setTimeout(() => {
-                const allRooms = Array.from(io.sockets.adapter.rooms.keys());
-                console.log('🏠 All active rooms:', allRooms);
-                console.log('🏠 Rooms with user:', allRooms.filter(r => r.startsWith('user:')));
-              }, 100);
-            } else {
-              console.warn('⚠️  join:user-room called but userId is missing');
-            }
-          });
+        // Log all active rooms for debugging
+        setTimeout(() => {
+          const allRooms = Array.from(io.sockets.adapter.rooms.keys());
+          console.log('🏠 All active rooms:', allRooms);
+          console.log('🏠 Rooms with user:', allRooms.filter(r => r.startsWith('user:')));
+        }, 100);
+      } else {
+        console.warn('⚠️  join:user-room called but userId is missing');
+      }
+    });
+  });
 
   socket.on('disconnect', (reason) => {
     console.log('Socket disconnected:', socket.id, socket.userId, reason);

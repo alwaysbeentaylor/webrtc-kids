@@ -13,6 +13,8 @@ export type SocketEvents = {
   'call:cancel': (data: { fromUserId: string }) => void; // New: cancel before answer
   'call:hangup': (data: { fromUserId: string }) => void; // New: hangup after answer
   'room:joined': (data: { room: string; userId: string }) => void;
+  'auth:ok': (data: { userId: string; role: 'parent' | 'child' }) => void;
+  'auth:error': (data: { message: string }) => void;
   error: (data: { message: string; code?: string }) => void;
 };
 
@@ -24,6 +26,7 @@ class SocketService {
   private serverUrl: string = '';
   private tokenGetter: TokenGetter | null = null;
   private maxReconnectAttempts = 5;
+  private currentToken: string | null = null; // Store token for auth:join
 
   private constructor() {}
 
@@ -81,7 +84,40 @@ class SocketService {
           }
         });
         
-        console.log(`✅ Socket connected successfully on attempt ${attempt}`);
+        // Wait for auth:ok after connection
+        await new Promise<void>((resolve, reject) => {
+          if (!this.socket) {
+            reject(new Error('Socket not created'));
+            return;
+          }
+          
+          const authTimeout = setTimeout(() => {
+            this.socket?.off('auth:ok', onAuthOk);
+            this.socket?.off('auth:error', onAuthError);
+            reject(new Error('Authentication timeout - no auth:ok received'));
+          }, 5000);
+          
+          const onAuthOk = (data: { userId: string; role: 'parent' | 'child' }) => {
+            clearTimeout(authTimeout);
+            this.socket?.off('auth:ok', onAuthOk);
+            this.socket?.off('auth:error', onAuthError);
+            console.log('✅✅✅ Auth OK received:', data);
+            resolve();
+          };
+          
+          const onAuthError = (data: { message: string }) => {
+            clearTimeout(authTimeout);
+            this.socket?.off('auth:ok', onAuthOk);
+            this.socket?.off('auth:error', onAuthError);
+            reject(new Error(`Authentication failed: ${data.message}`));
+          };
+          
+          // Check if already authenticated (shouldn't happen, but just in case)
+          this.socket.once('auth:ok', onAuthOk);
+          this.socket.once('auth:error', onAuthError);
+        });
+        
+        console.log(`✅ Socket connected and authenticated successfully on attempt ${attempt}`);
         return; // Success, exit retry loop
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -115,6 +151,9 @@ class SocketService {
     if (!token) {
       throw new Error('No authentication token available');
     }
+    
+    // Store token for auth:join event
+    this.currentToken = token;
 
     // Detect mobile device
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -166,7 +205,7 @@ class SocketService {
     this.socket = io(this.serverUrl, connectionOptions);
 
     // Add connection event listeners IMMEDIATELY after creating socket
-    this.socket.on('connect', () => {
+    this.socket.on('connect', async () => {
       console.log('✅✅✅✅✅ Socket.IO CONNECTED!', {
         socketId: this.socket?.id,
         connected: this.socket?.connected,
@@ -174,6 +213,12 @@ class SocketService {
         transport: this.socket?.io?.engine?.transport?.name || 'unknown',
         isMobile
       });
+      
+      // Immediately send auth:join event with token
+      if (this.socket && this.currentToken) {
+        console.log('🔐🔐🔐 Sending auth:join event with token...');
+        this.socket.emit('auth:join', { token: this.currentToken });
+      }
     });
 
     this.socket.on('connect_error', (error) => {
@@ -264,6 +309,7 @@ class SocketService {
   }
 
   // Join user room for targeted messaging - returns promise that resolves when ACK received
+  // Note: Room is already joined after auth:ok, but we can still call this for confirmation
   async joinUserRoom(): Promise<void> {
     if (!this.socket?.connected) {
       throw new Error('Cannot join user room - socket not connected');
@@ -274,6 +320,8 @@ class SocketService {
       throw new Error('Socket is null');
     }
     
+    // Check if we already received room:joined (from auth:ok)
+    // If so, resolve immediately
     return new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
         socket.off('room:joined', onRoomJoined);

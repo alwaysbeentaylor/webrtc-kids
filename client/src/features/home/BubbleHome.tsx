@@ -122,9 +122,16 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
       setSocketConnected(false);
     };
 
+    const handleAuthError = (data: { message: string }) => {
+      console.error('❌ Socket auth error in BubbleHome:', data.message);
+      setConnectionError(`Authentication failed: ${data.message}`);
+      setSocketConnected(false);
+    };
+
     socketService.on('connect', handleConnect);
     socketService.on('disconnect', handleDisconnect);
     socketService.on('connect_error', handleConnectError);
+    socketService.on('auth:error', handleAuthError);
     
     // Detect mobile
     const checkMobile = () => {
@@ -169,6 +176,8 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
     return () => {
       socketService.off('connect', handleConnect);
       socketService.off('disconnect', handleDisconnect);
+      socketService.off('connect_error', handleConnectError);
+      socketService.off('auth:error', handleAuthError);
       clearInterval(connectionCheckInterval);
       clearTimeout(delayedCheck);
     };

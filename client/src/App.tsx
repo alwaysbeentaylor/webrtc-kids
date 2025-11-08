@@ -526,13 +526,19 @@ function App() {
           
           console.log('✅ Socket connect() call completed');
           
-          // Give socket a moment to connect
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          // Room is already joined after auth:ok, but we can call joinUserRoom for confirmation
+          // It will resolve immediately if room:joined was already received
+          try {
+            await socketService.joinUserRoom();
+            console.log('✅ User room join confirmed');
+          } catch (error) {
+            console.warn('⚠️ Room join confirmation failed (room may already be joined):', error);
+          }
           
           const connected = socketService.isConnected();
-          console.log('🔍 Socket connection status after 2s:', connected);
+          console.log('🔍 Socket connection status:', connected);
           if (!connected) {
-            console.warn('⚠️ Socket still not connected after 2 seconds. Check backend logs.');
+            console.warn('⚠️ Socket not connected. Check backend logs.');
           }
         } catch (error) {
           console.error('❌❌❌ Failed to connect socket:', error);
