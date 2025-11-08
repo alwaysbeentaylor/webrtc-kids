@@ -753,7 +753,7 @@ function App() {
           <ChildCodeLogin onLoginSuccess={(userId, name, fid, role) => {
             console.log('✅ Child login success:', { userId, name, fid, role });
             if (role === 'child') {
-              const newChildSession = { userId, childName: name, familyId: fid, role: 'child' };
+              const newChildSession: ChildSession = { userId, childName: name, familyId: fid, role: 'child' };
               console.log('💾 Saving child session to localStorage:', newChildSession);
               localStorage.setItem('childSession', JSON.stringify(newChildSession));
               setChildSession(newChildSession);
@@ -767,7 +767,8 @@ function App() {
             } else {
               // For parent code login, we need to handle it differently
               // For now, treat it similar to child but mark as parent
-              setChildSession({ userId, childName: name, familyId: fid, role: 'child' }); // Temporary
+              const tempChildSession: ChildSession = { userId, childName: name, familyId: fid, role: 'child' };
+              setChildSession(tempChildSession); // Temporary
               setFamilyId(fid);
               setCurrentUserId(userId);
               setCurrentUserName(name);
