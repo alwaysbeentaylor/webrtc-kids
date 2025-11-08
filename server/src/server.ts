@@ -171,17 +171,27 @@ io.use(async (socket: AuthenticatedSocket, next) => {
   }
   
   process.stdout.write(`🔐🔐🔐 FINAL TOKEN: ${token || 'UNDEFINED'}\n`);
+  process.stdout.write(`🔐🔐🔐 Token length: ${token ? token.length : 0}\n`);
+  process.stdout.write(`🔐🔐🔐 Token type: ${typeof token}\n`);
   process.stdout.write(`🔐🔐🔐 Starts with child-token-: ${token ? token.startsWith('child-token-') : false}\n`);
+  if (token && typeof token === 'string') {
+    process.stdout.write(`🔐🔐🔐 Token first 50 chars: ${token.substring(0, 50)}\n`);
+  }
   
   // CRITICAL: If it's a child token, accept IMMEDIATELY without any checks
   if (token && typeof token === 'string' && token.startsWith('child-token-')) {
     const userId = token.replace('child-token-', '').trim();
+    process.stdout.write(`🔐🔐🔐 Extracted userId from child token: ${userId}\n`);
     if (userId && userId.length > 0) {
       socket.userId = userId;
       socket.userRole = 'child';
       process.stdout.write(`✅✅✅✅✅✅✅✅✅ CHILD ACCEPTED: ${socket.id}, User: ${userId}\n`);
       return next(); // Accept immediately!
+    } else {
+      process.stdout.write(`❌❌❌ Child token has empty userId after extraction\n`);
     }
+  } else {
+    process.stdout.write(`❌❌❌ Token does NOT start with child-token-. Token: ${token ? token.substring(0, 50) : 'UNDEFINED'}\n`);
   }
   
   // DEV ONLY: Accept parent dev token without Firebase (for local testing), gated by env
