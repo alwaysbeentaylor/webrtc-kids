@@ -204,6 +204,18 @@ class SocketService {
     
     this.socket = io(this.serverUrl, connectionOptions);
 
+    // DEBUG: log every incoming socket event to verify signaling flow
+    this.socket.onAny((event, ...args) => {
+      try {
+        console.log('📨📨📨 Socket event received:', event, {
+          arg0Keys: args && args[0] ? Object.keys(args[0]) : [],
+          data: args[0]
+        });
+      } catch (err) {
+        console.log('📨📨📨 Socket event (unable to serialize):', event);
+      }
+    });
+
     // Add connection event listeners IMMEDIATELY after creating socket
     this.socket.on('connect', async () => {
       console.log('✅✅✅✅✅ Socket.IO CONNECTED!', {
