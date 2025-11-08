@@ -378,93 +378,99 @@ io.on('connection', (socket: AuthenticatedSocket) => {
       process.stdout.write(`  - Socket ${authSocket.id}: userId=${authSocket.userId}, inRoom=${isInRoom}\n`);
     });
     
-    if (!roomExists) {
-      process.stdout.write(`❌❌❌ Target user NOT in room: ${targetRoom}\n`);
-      socket.emit('error', { 
-        message: `Gebruiker ${data.targetUserId} is niet online of niet verbonden.` 
-      });
-      return;
+    // Prepare offer data
+    const offerData = {
+      ...data,
+      fromUserId: socket.userId,
+      targetUserId: data.targetUserId
+    };
+    
+    // Check if target user is in their room
+    const socketsInRoom = io.sockets.adapter.rooms.get(targetRoom);
+    const socketCount = socketsInRoom ? socketsInRoom.size : 0;
+    
+    process.stdout.write(`📤 Sockets in room: ${socketCount}\n`);
+    
+    // Always try to forward offer to room (even if empty, it won't hurt)
+    if (roomExists && socketCount > 0) {
+      process.stdout.write(`📤📤📤 Forwarding offer to room: ${targetRoom}\n`);
+      process.stdout.write(`📤 Sending to socket in room: ${targetRoom}\n`);
+      process.stdout.write(`📤 Offer data: ${JSON.stringify({
+        fromUserId: offerData.fromUserId,
+        targetUserId: offerData.targetUserId,
+        hasOffer: !!offerData.offer,
+        offerType: offerData.offer?.type
+      })}\n`);
+      
+      // Use io.to() instead of socket.to() to ensure it reaches the room
+      io.to(targetRoom).emit('call:offer', offerData);
+    } else {
+      process.stdout.write(`⚠️ Target user NOT in room: ${targetRoom}, but continuing with FCM push...\n`);
     }
     
-          // Forward offer to target user
-          const offerData = {
-            ...data,
-            fromUserId: socket.userId,
-            targetUserId: data.targetUserId
-          };
-          
-          process.stdout.write(`📤📤📤 Forwarding offer to room: ${targetRoom}\n`);
-          process.stdout.write(`📤 Sending to socket in room: ${targetRoom}\n`);
-          process.stdout.write(`📤 Offer data: ${JSON.stringify({
-            fromUserId: offerData.fromUserId,
-            targetUserId: offerData.targetUserId,
-            hasOffer: !!offerData.offer,
-            offerType: offerData.offer?.type
-          })}\n`);
-          
-          // Use io.to() instead of socket.to() to ensure it reaches the room
-          io.to(targetRoom).emit('call:offer', offerData);
-          
-          // Also log how many sockets are in the target room
-          const socketsInRoom = io.sockets.adapter.rooms.get(targetRoom);
-          const socketCount = socketsInRoom ? socketsInRoom.size : 0;
-          process.stdout.write(`📤 Sockets in room: ${socketCount}\n`);
-          
-          // Always send FCM push notification as backup, even if socket is connected
-          // This ensures notifications work when app is in background or socket is unstable
-          const hasFCMToken = fcmTokens.has(data.targetUserId);
-          console.log(`📱 FCM token check for user ${data.targetUserId}: ${hasFCMToken ? 'EXISTS' : 'NOT FOUND'}`);
-          
-          if (socketCount === 0) {
-            process.stdout.write(`📱 No active socket connection, sending FCM push notification...\n`);
-            if (hasFCMToken) {
-              const fcmToken = fcmTokens.get(data.targetUserId);
-              console.log(`📱 Sending FCM push to token: ${fcmToken?.substring(0, 20)}...`);
-              sendFCMPush(
-                data.targetUserId,
-                'Nieuwe oproep',
-                `${socket.userId ? 'Je hebt een oproep ontvangen' : 'Nieuwe oproep'}`,
-                {
-                  type: 'call:offer',
-                  fromUserId: socket.userId || '',
-                  targetUserId: data.targetUserId,
-                  callId: `call-${Date.now()}`
-                }
-              ).then(() => {
-                console.log(`✅ FCM push sent successfully to ${data.targetUserId}`);
-              }).catch(err => {
-                console.error('❌ Failed to send FCM push:', err);
-              });
-            } else {
-              process.stdout.write(`⚠️ No FCM token found for user: ${data.targetUserId}\n`);
-              console.log(`⚠️ Available FCM tokens: ${Array.from(fcmTokens.keys()).join(', ')}`);
-            }
-          } else {
-            // Socket is connected, but still send FCM push as backup for background scenarios
-            // This helps when app is in background and socket might be slow to deliver
-            if (hasFCMToken) {
-              process.stdout.write(`📱 Socket connected (${socketCount} sockets) but sending FCM push as backup...\n`);
-              const fcmToken = fcmTokens.get(data.targetUserId);
-              console.log(`📱 Sending backup FCM push to token: ${fcmToken?.substring(0, 20)}...`);
-              sendFCMPush(
-                data.targetUserId,
-                'Nieuwe oproep',
-                'Je hebt een oproep ontvangen',
-                {
-                  type: 'call:offer',
-                  fromUserId: socket.userId || '',
-                  targetUserId: data.targetUserId,
-                  callId: `call-${Date.now()}`
-                }
-              ).then(() => {
-                console.log(`✅ Backup FCM push sent successfully to ${data.targetUserId}`);
-              }).catch(err => {
-                console.error('❌ Failed to send backup FCM push:', err);
-              });
-            } else {
-              console.log(`⚠️ No FCM token for backup push to ${data.targetUserId}`);
-            }
+    // Always send FCM push notification as backup, even if socket is connected
+    // This ensures notifications work when app is in background or socket is unstable
+    const hasFCMToken = fcmTokens.has(data.targetUserId);
+    console.log(`📱 FCM token check for user ${data.targetUserId}: ${hasFCMToken ? 'EXISTS' : 'NOT FOUND'}`);
+    
+    if (socketCount === 0 || !roomExists) {
+      process.stdout.write(`📱 No active socket connection or room doesn't exist, sending FCM push notification...\n`);
+      if (hasFCMToken) {
+        const fcmToken = fcmTokens.get(data.targetUserId);
+        console.log(`📱 Sending FCM push to token: ${fcmToken?.substring(0, 20)}...`);
+        sendFCMPush(
+          data.targetUserId,
+          'Nieuwe oproep',
+          `${socket.userId ? 'Je hebt een oproep ontvangen' : 'Nieuwe oproep'}`,
+          {
+            type: 'call:offer',
+            fromUserId: socket.userId || '',
+            targetUserId: data.targetUserId,
+            callId: `call-${Date.now()}`,
+            offer: JSON.stringify(data.offer) // Include offer in FCM data so call can be accepted
           }
+        ).then(() => {
+          console.log(`✅ FCM push sent successfully to ${data.targetUserId}`);
+        }).catch(err => {
+          console.error('❌ Failed to send FCM push:', err);
+        });
+      } else {
+        process.stdout.write(`⚠️ No FCM token found for user: ${data.targetUserId}\n`);
+        console.log(`⚠️ Available FCM tokens: ${Array.from(fcmTokens.keys()).join(', ')}`);
+        // Only show error if no FCM token AND no socket connection
+        if (!roomExists) {
+          socket.emit('error', { 
+            message: `Gebruiker ${data.targetUserId} is niet online of niet verbonden. Probeer het later opnieuw.` 
+          });
+        }
+      }
+    } else {
+      // Socket is connected, but still send FCM push as backup for background scenarios
+      // This helps when app is in background and socket might be slow to deliver
+      if (hasFCMToken) {
+        process.stdout.write(`📱 Socket connected (${socketCount} sockets) but sending FCM push as backup...\n`);
+        const fcmToken = fcmTokens.get(data.targetUserId);
+        console.log(`📱 Sending backup FCM push to token: ${fcmToken?.substring(0, 20)}...`);
+        sendFCMPush(
+          data.targetUserId,
+          'Nieuwe oproep',
+          'Je hebt een oproep ontvangen',
+          {
+            type: 'call:offer',
+            fromUserId: socket.userId || '',
+            targetUserId: data.targetUserId,
+            callId: `call-${Date.now()}`,
+            offer: JSON.stringify(data.offer) // Include offer in FCM data
+          }
+        ).then(() => {
+          console.log(`✅ Backup FCM push sent successfully to ${data.targetUserId}`);
+        }).catch(err => {
+          console.error('❌ Failed to send backup FCM push:', err);
+        });
+      } else {
+        console.log(`⚠️ No FCM token for backup push to ${data.targetUserId}`);
+      }
+    }
           
           process.stdout.write(`✅✅✅ Call offer forwarded to: ${targetRoom}\n\n`);
     });
