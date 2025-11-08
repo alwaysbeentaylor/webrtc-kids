@@ -3,6 +3,7 @@
 export type SocketEvents = {
   connect: () => void;
   disconnect: (reason: string) => void;
+  connect_error: (error: Error) => void;
   pong: (data: { at: number; userId?: string }) => void;
   'call:offer': (data: { fromUserId: string; offer: RTCSessionDescriptionInit; targetUserId: string }) => void;
   'call:answer': (data: { fromUserId: string; answer: RTCSessionDescriptionInit; targetUserId: string }) => void;
