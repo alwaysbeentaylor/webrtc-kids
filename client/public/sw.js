@@ -88,9 +88,12 @@ function startHeartbeat() {
         client.postMessage({ type: 'HEARTBEAT', timestamp: Date.now() });
       });
     });
+    
+    // Also log to keep service worker active
+    console.log('💓 Service Worker heartbeat:', new Date().toISOString());
   }, HEARTBEAT_INTERVAL);
   
-  console.log('✅ Heartbeat started');
+  console.log('✅ Heartbeat started (20s interval)');
 }
 
 // Handle push notifications (from FCM or push service)
