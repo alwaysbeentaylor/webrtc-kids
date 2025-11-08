@@ -203,6 +203,8 @@ class SocketService {
     });
     
     this.socket = io(this.serverUrl, connectionOptions);
+    // Debug: expose socket for manual inspection
+    (window as any).__webrtcSocket = this.socket;
 
     // DEBUG: log every incoming socket event to verify signaling flow
     this.socket.onAny((event, ...args) => {
