@@ -899,9 +899,13 @@ function App() {
     );
   }
 
-  // Show call screen if active call OR if WebRTCService has an incoming call
+  // Show call screen if active call OR if WebRTCService has an active call (ringing, dialing, or active)
   const webrtcCall = webrtcService.getCurrentCall();
-  const shouldShowCallScreen = activeCall || (webrtcCall && webrtcCall.direction === 'incoming' && webrtcCall.state === 'ringing');
+  const isCallActive = webrtcCall && 
+    (webrtcCall.state === 'ringing' || 
+     webrtcCall.state === 'dialing' || 
+     webrtcCall.state === 'active');
+  const shouldShowCallScreen = activeCall || isCallActive;
   
   console.log('🔍🔍🔍 Call screen check:', {
     activeCall: !!activeCall,
@@ -919,9 +923,10 @@ function App() {
     
     // Determine call info from activeCall or webrtcCall
     const callInfo = activeCall || (webrtcCall ? {
-      contactId: webrtcCall.targetUserId,
+      contactId: webrtcCall.direction === 'incoming' ? webrtcCall.targetUserId : webrtcCall.targetUserId,
       contactName: webrtcCall.targetUserId, // Will show userId, caller name can be fetched by CallScreen if needed
       remoteRole: undefined as 'parent' | 'child' | undefined
+    } : null);
     } : null);
     
     if (callInfo) {
