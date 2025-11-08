@@ -247,6 +247,7 @@ function App() {
   const [currentUserName, setCurrentUserName] = useState<string>('');
   const [isParent, setIsParent] = useState(false);
   const [initializationError, setInitializationError] = useState<string | null>(null);
+  const [callStateUpdate, setCallStateUpdate] = useState(0); // Force re-render when call state changes
 
   // Initialize notification service and service worker
   useEffect(() => {
@@ -699,6 +700,21 @@ function App() {
     };
   }, []);
 
+  // Listen for call state changes to force re-render
+  useEffect(() => {
+    const handleCallStateChange = () => {
+      console.log('🔄 Call state changed, forcing re-render...');
+      setCallStateUpdate(prev => prev + 1);
+    };
+    
+    // Subscribe to call state changes
+    const unsubscribe = webrtcService.subscribe(handleCallStateChange);
+    
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
   // Show loading state
   if (authState.loading && !childSession) {
     return (
@@ -893,7 +909,8 @@ function App() {
     shouldShowCallScreen,
     familyId: !!familyId,
     currentUserId: !!currentUserId,
-    allConditionsMet: shouldShowCallScreen && !!familyId && !!currentUserId
+    allConditionsMet: shouldShowCallScreen && !!familyId && !!currentUserId,
+    callStateUpdate // Force re-render when call state changes
   });
   
   if (shouldShowCallScreen && familyId && currentUserId) {
