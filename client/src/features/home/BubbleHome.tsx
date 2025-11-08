@@ -1614,81 +1614,81 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
       `}</style>
 
 
-      {/* Settings button for parents - icon only, smaller */}
+      {/* Add Child button - only for parents */}
       {isParent && (
-        <>
-          <button
-            onClick={() => setShowAddChildModal(true)}
-            style={{
-              position: 'absolute',
-              top: '15px',
-              right: '105px',
-              width: '32px',
-              height: '32px',
-              padding: '0',
-              backgroundColor: 'rgba(33, 150, 243, 0.9)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '50%',
-              cursor: 'pointer',
-              fontSize: '20px',
-              fontWeight: '600',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-              transition: 'transform 0.2s, box-shadow 0.2s',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 100
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'scale(1.1)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
-            }}
-            title="Kind toevoegen"
-          >
-            +
-          </button>
-          <button
-            onClick={() => setShowSettingsModal(true)}
-            style={{
-              position: 'absolute',
-              top: '15px',
-              right: '60px',
-              width: '32px',
-              height: '32px',
-              padding: '0',
-              backgroundColor: 'rgba(102, 126, 234, 0.9)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '50%',
-              cursor: 'pointer',
-              fontSize: '16px',
-              fontWeight: '600',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-              transition: 'transform 0.2s, box-shadow 0.2s',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 100
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'scale(1.1)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
-            }}
-            title="Instellingen"
-          >
-            ⚙️
-          </button>
-        </>
+        <button
+          onClick={() => setShowAddChildModal(true)}
+          style={{
+            position: 'absolute',
+            top: '15px',
+            right: '105px',
+            width: '32px',
+            height: '32px',
+            padding: '0',
+            backgroundColor: 'rgba(33, 150, 243, 0.9)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '50%',
+            cursor: 'pointer',
+            fontSize: '20px',
+            fontWeight: '600',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            transition: 'transform 0.2s, box-shadow 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.1)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+          }}
+          title="Kind toevoegen"
+        >
+          +
+        </button>
       )}
+
+      {/* Settings button - available for everyone */}
+      <button
+        onClick={() => setShowSettingsModal(true)}
+        style={{
+          position: 'absolute',
+          top: '15px',
+          right: isParent ? '60px' : '60px',
+          width: '32px',
+          height: '32px',
+          padding: '0',
+          backgroundColor: 'rgba(102, 126, 234, 0.9)',
+          color: 'white',
+          border: 'none',
+          borderRadius: '50%',
+          cursor: 'pointer',
+          fontSize: '16px',
+          fontWeight: '600',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+          transition: 'transform 0.2s, box-shadow 0.2s',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 100
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'scale(1.1)';
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'scale(1)';
+          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+        }}
+        title="Instellingen"
+      >
+        ⚙️
+      </button>
 
       {/* Logout button - smaller, with arrow */}
       <button
@@ -2147,6 +2147,100 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
                 </p>
               </div>
 
+              {/* Notifications Section - Available for everyone */}
+              <div style={{
+                padding: '1.5rem',
+                backgroundColor: '#f8f9fa',
+                borderRadius: '12px',
+                border: '1px solid #e0e0e0'
+              }}>
+                <h3 style={{
+                  marginTop: 0,
+                  marginBottom: '1rem',
+                  color: '#333',
+                  fontSize: '1.2rem',
+                  fontWeight: '600'
+                }}>
+                  🔔 Notificaties
+                </h3>
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.75rem'
+                }}>
+                  {/* Enable Notifications Button (for iOS) */}
+                  {('Notification' in window) && Notification.permission !== 'granted' && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const permission = await notificationService.requestNotificationPermission();
+                          if (permission === 'granted') {
+                            alert('✅ Notificaties zijn ingeschakeld! Je ontvangt nu push notificaties voor oproepen.');
+                            setShowSettingsModal(false); // Close modal after enabling
+                          } else if (permission === 'denied') {
+                            alert('⚠️ Notificaties zijn geweigerd. Ga naar Instellingen > [App naam] > Notificaties om dit later aan te passen.');
+                          }
+                        } catch (error) {
+                          console.error('Error requesting notification permission:', error);
+                          alert('Kon notificatie toestemming niet aanvragen. Probeer het opnieuw.');
+                        }
+                      }}
+                      style={{
+                        padding: '12px 20px',
+                        backgroundColor: '#4CAF50',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        transition: 'background-color 0.2s',
+                        textAlign: 'left',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        width: '100%'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#45a049';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#4CAF50';
+                      }}
+                    >
+                      <span>🔔</span>
+                      <span>Notificaties Inschakelen</span>
+                    </button>
+                  )}
+
+                  {/* Notification Status */}
+                  {('Notification' in window) && Notification.permission === 'granted' && (
+                    <div style={{
+                      padding: '12px 20px',
+                      backgroundColor: '#e8f5e9',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      color: '#2e7d32',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px'
+                    }}>
+                      ✅ Notificaties zijn ingeschakeld
+                    </div>
+                  )}
+
+                  {!('Notification' in window) && (
+                    <p style={{
+                      margin: 0,
+                      color: '#666',
+                      fontSize: '0.9rem'
+                    }}>
+                      ⚠️ Notificaties worden niet ondersteund in deze browser
+                    </p>
+                  )}
+                </div>
+              </div>
+
               {/* Actions Section */}
               <div style={{
                 padding: '1.5rem',
@@ -2168,15 +2262,15 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
                   flexDirection: 'column',
                   gap: '0.75rem'
                 }}>
-                  <button
-                    onClick={async () => {
-                      try {
-                        await firebaseService.requestPasswordReset();
-                        alert('Een wachtwoord-reset e-mail is verzonden. Controleer je inbox.');
-                      } catch (e) {
-                        alert(e instanceof Error ? e.message : 'Kon reset e-mail niet verzenden');
-                      }
-                    }}
+                      <button
+                        onClick={async () => {
+                          try {
+                            await firebaseService.requestPasswordReset();
+                            alert('Een wachtwoord-reset e-mail is verzonden. Controleer je inbox.');
+                          } catch (e) {
+                            alert(e instanceof Error ? e.message : 'Kon reset e-mail niet verzenden');
+                          }
+                        }}
                     style={{
                       padding: '12px 20px',
                       backgroundColor: '#667eea',
@@ -2232,65 +2326,6 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
                     <span>➕</span>
                     <span>Kind toevoegen</span>
                   </button>
-                  
-                  {/* Enable Notifications Button (for iOS) */}
-                  {('Notification' in window) && Notification.permission !== 'granted' && (
-                    <button
-                      onClick={async () => {
-                        try {
-                          const permission = await notificationService.requestNotificationPermission();
-                          if (permission === 'granted') {
-                            alert('✅ Notificaties zijn ingeschakeld! Je ontvangt nu push notificaties voor oproepen.');
-                          } else if (permission === 'denied') {
-                            alert('⚠️ Notificaties zijn geweigerd. Ga naar Instellingen > [App naam] > Notificaties om dit later aan te passen.');
-                          }
-                        } catch (error) {
-                          console.error('Error requesting notification permission:', error);
-                          alert('Kon notificatie toestemming niet aanvragen. Probeer het opnieuw.');
-                        }
-                      }}
-                      style={{
-                        padding: '12px 20px',
-                        backgroundColor: '#4CAF50',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                        fontWeight: '600',
-                        transition: 'background-color 0.2s',
-                        textAlign: 'left',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#45a049';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = '#4CAF50';
-                      }}
-                    >
-                      <span>🔔</span>
-                      <span>Notificaties Inschakelen</span>
-                    </button>
-                  )}
-
-                  {/* Notification Status */}
-                  {('Notification' in window) && Notification.permission === 'granted' && (
-                    <div style={{
-                      padding: '12px 20px',
-                      backgroundColor: '#e8f5e9',
-                      borderRadius: '8px',
-                      fontSize: '14px',
-                      color: '#2e7d32',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px'
-                    }}>
-                      ✅ Notificaties zijn ingeschakeld
-                    </div>
-                  )}
                   
                   <button
                     onClick={handleLogout}
