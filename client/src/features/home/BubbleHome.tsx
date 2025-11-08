@@ -2212,6 +2212,70 @@ export function BubbleHome({ onCallContact, isParent, familyId, currentUserId, c
                   </button>
                 </div>
               </div>
+
+              {/* Delete All Children Section - Only for parents */}
+              {isParent && (
+                <div style={{
+                  padding: '1.5rem',
+                  backgroundColor: '#fff3cd',
+                  borderRadius: '12px',
+                  border: '2px solid #ffc107'
+                }}>
+                  <h3 style={{
+                    marginTop: 0,
+                    marginBottom: '1rem',
+                    color: '#856404',
+                    fontSize: '1.2rem',
+                    fontWeight: '600'
+                  }}>
+                    ⚠️ Verwijder Alle Kinderen
+                  </h3>
+                  <p style={{
+                    margin: '0.5rem 0',
+                    color: '#856404',
+                    fontSize: '0.95rem',
+                    marginBottom: '1rem'
+                  }}>
+                    Dit verwijdert alle kinderen uit je familie. Deze actie kan niet ongedaan worden gemaakt.
+                  </p>
+                  <button
+                    onClick={async () => {
+                      const childCount = contacts.filter(c => c.type === 'child').length;
+                      if (childCount === 0) {
+                        alert('Er zijn geen kinderen om te verwijderen.');
+                        return;
+                      }
+                      
+                      const confirmed = window.confirm(
+                        `Weet je zeker dat je alle ${childCount} kinderen wilt verwijderen?\n\nDeze actie kan niet ongedaan worden gemaakt.`
+                      );
+                      
+                      if (confirmed) {
+                        try {
+                          const deletedCount = await familyService.deleteAllChildren(familyId, currentUserId);
+                          alert(`✅ ${deletedCount} kinderen succesvol verwijderd!`);
+                          setShowSettingsModal(false);
+                        } catch (error) {
+                          alert(error instanceof Error ? error.message : 'Kon kinderen niet verwijderen');
+                        }
+                      }
+                    }}
+                    style={{
+                      padding: '10px 20px',
+                      backgroundColor: '#dc3545',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      width: '100%'
+                    }}
+                  >
+                    🗑️ Verwijder Alle Kinderen
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

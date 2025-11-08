@@ -413,6 +413,61 @@ class FamilyService {
     }
   }
 
+  // Delete all children in a family (only parents can do this)
+  async deleteAllChildren(familyId: string, parentUserId: string): Promise<number> {
+    try {
+      // Verify parent exists and is in the family
+      const parentDoc = await getDoc(doc(db, 'users', parentUserId));
+      if (!parentDoc.exists()) {
+        throw new Error('Ouder niet gevonden');
+      }
+
+      const parentData = parentDoc.data();
+      if (parentData.role !== 'parent') {
+        throw new Error('Alleen ouders kunnen kinderen verwijderen');
+      }
+
+      if (parentData.familyId !== familyId) {
+        throw new Error('Je behoort niet tot deze familie');
+      }
+
+      // Get all children in the family
+      const q = query(
+        collection(db, 'users'), 
+        where('familyId', '==', familyId),
+        where('role', '==', 'child')
+      );
+      const querySnapshot = await getDocs(q);
+      
+      const children = querySnapshot.docs;
+      let deletedCount = 0;
+
+      // Delete all children
+      for (const childDoc of children) {
+        try {
+          await deleteDoc(childDoc.ref);
+          
+          // Also clean up localStorage if exists
+          const childUserId = childDoc.id;
+          localStorage.removeItem(`user_${childUserId}`);
+          localStorage.removeItem(`family_${childUserId}`);
+          localStorage.removeItem('childSession'); // Remove child session if exists
+          
+          deletedCount++;
+        } catch (error) {
+          console.error(`Error deleting child ${childDoc.id}:`, error);
+          // Continue with other children even if one fails
+        }
+      }
+
+      console.log(`✅ ${deletedCount} children deleted successfully`);
+      return deletedCount;
+    } catch (error) {
+      console.error('Error deleting all children:', error);
+      throw error;
+    }
+  }
+
   // Subscribe to child deletion (for child accounts to detect when they're deleted)
   subscribeToChildDeletion(childUserId: string, onDeleted: () => void): () => void {
     const userRef = doc(db, 'users', childUserId);
