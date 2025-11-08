@@ -384,6 +384,18 @@ function App() {
       shouldConnect: !!(userId && fid && (authState.user || childSession))
     });
     
+    // CRITICAL CHECK: If we have a child session, we MUST use it, not Firebase
+    if (childSession && childSession.userId) {
+      console.log('✅✅✅ CHILD SESSION DETECTED - Will use child token:', {
+        userId: childSession.userId,
+        familyId: childSession.familyId
+      });
+    } else if (authState.user) {
+      console.log('⚠️⚠️⚠️ NO CHILD SESSION - Will use Firebase token (this may fail on mobile):', {
+        userId: authState.user.uid
+      });
+    }
+    
     if (userId && fid && (authState.user || childSession)) {
       console.log('🔌🔌🔌 Socket connection conditions met:', {
         userId,
