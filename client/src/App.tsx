@@ -247,7 +247,6 @@ function App() {
   const [currentUserName, setCurrentUserName] = useState<string>('');
   const [isParent, setIsParent] = useState(false);
   const [initializationError, setInitializationError] = useState<string | null>(null);
-  const [webrtcCallerName, setWebrtcCallerName] = useState<string | null>(null);
 
   // Initialize notification service and service worker
   useEffect(() => {
@@ -693,18 +692,6 @@ function App() {
             };
           }, [familyId, currentUserId]);
 
-  // Fetch caller name when WebRTC call is detected
-  useEffect(() => {
-    const webrtcCall = webrtcService.getCurrentCall();
-    if (webrtcCall && webrtcCall.direction === 'incoming' && webrtcCall.state === 'ringing' && !webrtcCallerName) {
-      familyService.getUserInfo(webrtcCall.targetUserId).then(info => {
-        setWebrtcCallerName(info?.displayName || webrtcCall.targetUserId);
-      }).catch(() => {
-        setWebrtcCallerName(webrtcCall.targetUserId);
-      });
-    }
-  }, [webrtcCallerName]);
-
   // Cleanup ringtone on unmount
   useEffect(() => {
     return () => {
@@ -907,7 +894,7 @@ function App() {
     // Determine call info from activeCall or webrtcCall
     const callInfo = activeCall || (webrtcCall ? {
       contactId: webrtcCall.targetUserId,
-      contactName: webrtcCallerName || webrtcCall.targetUserId,
+      contactName: webrtcCall.targetUserId, // Will show userId, caller name can be fetched by CallScreen if needed
       remoteRole: undefined as 'parent' | 'child' | undefined
     } : null);
     
@@ -920,7 +907,6 @@ function App() {
           remoteRole={callInfo.remoteRole}
           onEndCall={() => {
             setActiveCall(null);
-            setWebrtcCallerName(null);
             webrtcService.endCall();
             stopIncomingCallSound();
           }}
