@@ -26,6 +26,61 @@ class WebRTCService {
   private peerConnection: RTCPeerConnection | null = null;
   private localStream: MediaStream | null = null;
   private remoteStream: MediaStream | null = null;
+  private isAppInBackground = false; // Track if app is in background
+
+  private handleAppBackground(): void {
+    console.log('📱 App went to background - pausing video tracks');
+    
+    // Pause video tracks but keep audio active
+    if (this.localStream) {
+      this.localStream.getVideoTracks().forEach(track => {
+        if (track.enabled) {
+          track.enabled = false; // Pause video but don't stop track
+          console.log('⏸️ Video track paused (background)');
+        }
+      });
+    }
+    
+    // Also pause remote video if available
+    if (this.remoteStream) {
+      this.remoteStream.getVideoTracks().forEach(track => {
+        if (track.enabled) {
+          track.enabled = false;
+          console.log('⏸️ Remote video track paused (background)');
+        }
+      });
+    }
+  }
+
+  private handleAppForeground(): void {
+    console.log('📱 App came to foreground - resuming video tracks');
+    
+    // Resume video tracks
+    if (this.localStream) {
+      this.localStream.getVideoTracks().forEach(track => {
+        if (!track.enabled) {
+          track.enabled = true; // Resume video
+          console.log('▶️ Video track resumed (foreground)');
+        }
+      });
+    }
+    
+    // Also resume remote video if available
+    if (this.remoteStream) {
+      this.remoteStream.getVideoTracks().forEach(track => {
+        if (!track.enabled) {
+          track.enabled = true;
+          console.log('▶️ Remote video track resumed (foreground)');
+        }
+      });
+    }
+    
+    // Reconnect socket if disconnected
+    if (socketService && !socketService.isConnected()) {
+      console.log('🔄 Socket disconnected, attempting reconnect...');
+      // Socket.IO will auto-reconnect, but we can trigger it manually
+    }
+  }
   private currentCall: CallInfo | null = null;
   private callStateListeners: Set<(state: CallState) => void> = new Set();
   private permissionsListeners: Set<(permissions: CallPermissions) => void> = new Set();
@@ -106,6 +161,30 @@ class WebRTCService {
       }
     } catch {
       // ignore
+    }
+    
+    // Listen for page visibility changes to handle background/foreground
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        const wasInBackground = this.isAppInBackground;
+        this.isAppInBackground = document.hidden;
+        
+        console.log('👁️ App visibility changed:', {
+          hidden: document.hidden,
+          wasInBackground,
+          hasCall: !!this.currentCall,
+          hasLocalStream: !!this.localStream,
+          hasRemoteStream: !!this.remoteStream
+        });
+        
+        if (document.hidden) {
+          // App went to background - pause video tracks but keep audio
+          this.handleAppBackground();
+        } else {
+          // App came to foreground - resume video tracks
+          this.handleAppForeground();
+        }
+      });
     }
   }
 

@@ -203,6 +203,8 @@ class SocketService {
       reconnectionDelayMax: isMobile ? 10000 : 5000, // Longer max delay on mobile
       reconnectionAttempts: this.maxReconnectAttempts,
       timeout: isMobile ? 20000 : 10000, // Longer timeout on mobile (20s vs 10s)
+      pingTimeout: isMobile ? 60000 : 20000, // Longer ping timeout on mobile (60s vs 20s)
+      pingInterval: isMobile ? 25000 : 10000, // More frequent pings on mobile (25s vs 10s)
       forceNew: true // Force new connection
     };
     
@@ -283,7 +285,48 @@ class SocketService {
         isMobile,
         transport: this.socket?.io?.engine?.transport?.name || 'unknown'
       });
+      
+      // If disconnected due to app going to background, try to reconnect when app comes back
+      if (reason === 'transport close' || reason === 'ping timeout') {
+        console.log('🔄 Disconnect likely due to app backgrounding, will reconnect when app returns');
+      }
     });
+
+    // Keep socket alive with periodic pings when app is in background
+    if (typeof document !== 'undefined') {
+      let keepAliveInterval: ReturnType<typeof setInterval> | null = null;
+      
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          // App went to background - start keep-alive pings
+          console.log('📱 App in background - starting socket keep-alive');
+          keepAliveInterval = setInterval(() => {
+            if (this.socket && this.socket.connected) {
+              // Send a ping to keep connection alive
+              this.socket.emit('ping', { timestamp: Date.now() });
+              console.log('💓 Socket keep-alive ping sent');
+            } else if (this.socket && !this.socket.connected) {
+              // Try to reconnect if disconnected
+              console.log('🔄 Socket disconnected, attempting reconnect...');
+              this.socket.connect();
+            }
+          }, 30000); // Every 30 seconds
+        } else {
+          // App came to foreground - stop keep-alive
+          if (keepAliveInterval) {
+            clearInterval(keepAliveInterval);
+            keepAliveInterval = null;
+            console.log('📱 App in foreground - stopped socket keep-alive');
+          }
+          
+          // Ensure socket is connected
+          if (this.socket && !this.socket.connected) {
+            console.log('🔄 Reconnecting socket after returning to foreground...');
+            this.socket.connect();
+          }
+        }
+      });
+    }
 
     // Log transport upgrades
     this.socket.io?.engine?.on('upgrade', () => {
