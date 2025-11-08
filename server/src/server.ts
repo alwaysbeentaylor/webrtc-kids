@@ -135,7 +135,12 @@ const io = new SocketIOServer(server, {
 
 // Authentication middleware for socket connections
 io.use(async (socket: AuthenticatedSocket, next) => {
-  // FORCE LOG to console immediately - USE process.stdout to ensure it's shown
+  // FORCE LOG to console - use both console.log and process.stdout for maximum visibility
+  console.log('\n\n🔍🔍🔍 ========== MIDDLEWARE CALLED ==========');
+  console.log(`🔍 Socket ID: ${socket.id}`);
+  console.log(`🔍 AUTH:`, socket.handshake.auth);
+  console.log(`🔍 QUERY:`, socket.handshake.query);
+  
   process.stdout.write('\n\n🔍🔍🔍 ========== MIDDLEWARE CALLED ==========\n');
   process.stdout.write(`🔍 Socket ID: ${socket.id}\n`);
   process.stdout.write(`🔍 AUTH: ${JSON.stringify(socket.handshake.auth)}\n`);
@@ -151,6 +156,7 @@ io.use(async (socket: AuthenticatedSocket, next) => {
   if (auth && typeof auth === 'object' && auth !== null) {
     if ('token' in auth) {
       token = String((auth as any).token);
+      console.log(`✅✅✅ Token from auth.token: ${token}`);
       process.stdout.write(`✅✅✅ Token from auth.token: ${token}\n`);
     }
   }
@@ -158,6 +164,7 @@ io.use(async (socket: AuthenticatedSocket, next) => {
   // Method 2: auth as string
   if (!token && typeof auth === 'string') {
     token = auth;
+    console.log(`✅✅✅ Token from auth (string): ${token}`);
     process.stdout.write(`✅✅✅ Token from auth (string): ${token}\n`);
   }
   
@@ -166,8 +173,17 @@ io.use(async (socket: AuthenticatedSocket, next) => {
     if ('token' in query) {
       const qToken = query.token;
       token = Array.isArray(qToken) ? String(qToken[0]) : String(qToken);
+      console.log(`✅✅✅ Token from query.token: ${token}`);
       process.stdout.write(`✅✅✅ Token from query.token: ${token}\n`);
     }
+  }
+  
+  console.log(`🔐🔐🔐 FINAL TOKEN: ${token || 'UNDEFINED'}`);
+  console.log(`🔐🔐🔐 Token length: ${token ? token.length : 0}`);
+  console.log(`🔐🔐🔐 Token type: ${typeof token}`);
+  console.log(`🔐🔐🔐 Starts with child-token-: ${token ? token.startsWith('child-token-') : false}`);
+  if (token && typeof token === 'string') {
+    console.log(`🔐🔐🔐 Token first 50 chars: ${token.substring(0, 50)}`);
   }
   
   process.stdout.write(`🔐🔐🔐 FINAL TOKEN: ${token || 'UNDEFINED'}\n`);
@@ -181,16 +197,20 @@ io.use(async (socket: AuthenticatedSocket, next) => {
   // CRITICAL: If it's a child token, accept IMMEDIATELY without any checks
   if (token && typeof token === 'string' && token.startsWith('child-token-')) {
     const userId = token.replace('child-token-', '').trim();
+    console.log(`🔐🔐🔐 Extracted userId from child token: ${userId}`);
     process.stdout.write(`🔐🔐🔐 Extracted userId from child token: ${userId}\n`);
     if (userId && userId.length > 0) {
       socket.userId = userId;
       socket.userRole = 'child';
+      console.log(`✅✅✅✅✅✅✅✅✅ CHILD ACCEPTED: ${socket.id}, User: ${userId}`);
       process.stdout.write(`✅✅✅✅✅✅✅✅✅ CHILD ACCEPTED: ${socket.id}, User: ${userId}\n`);
       return next(); // Accept immediately!
     } else {
+      console.log(`❌❌❌ Child token has empty userId after extraction`);
       process.stdout.write(`❌❌❌ Child token has empty userId after extraction\n`);
     }
   } else {
+    console.log(`❌❌❌ Token does NOT start with child-token-. Token: ${token ? token.substring(0, 50) : 'UNDEFINED'}`);
     process.stdout.write(`❌❌❌ Token does NOT start with child-token-. Token: ${token ? token.substring(0, 50) : 'UNDEFINED'}\n`);
   }
   
