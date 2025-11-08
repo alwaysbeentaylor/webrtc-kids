@@ -410,22 +410,47 @@ io.on('connection', (socket: AuthenticatedSocket) => {
           const socketCount = socketsInRoom ? socketsInRoom.size : 0;
           process.stdout.write(`📤 Sockets in room: ${socketCount}\n`);
           
-          // Send FCM push notification if target user is not connected via socket
+          // Always send FCM push notification as backup, even if socket is connected
+          // This ensures notifications work when app is in background or socket is unstable
+          const hasFCMToken = fcmTokens.has(data.targetUserId);
           if (socketCount === 0) {
             process.stdout.write(`📱 No active socket connection, sending FCM push notification...\n`);
-            sendFCMPush(
-              data.targetUserId,
-              'Nieuwe oproep',
-              'Je hebt een oproep ontvangen',
-              {
-                type: 'call:offer',
-                fromUserId: socket.userId || '',
-                targetUserId: data.targetUserId,
-                callId: `call-${Date.now()}`
-              }
-            ).catch(err => {
-              console.error('❌ Failed to send FCM push:', err);
-            });
+            if (hasFCMToken) {
+              sendFCMPush(
+                data.targetUserId,
+                'Nieuwe oproep',
+                `${socket.userId ? 'Je hebt een oproep ontvangen' : 'Nieuwe oproep'}`,
+                {
+                  type: 'call:offer',
+                  fromUserId: socket.userId || '',
+                  targetUserId: data.targetUserId,
+                  callId: `call-${Date.now()}`
+                }
+              ).catch(err => {
+                console.error('❌ Failed to send FCM push:', err);
+              });
+            } else {
+              process.stdout.write(`⚠️ No FCM token found for user: ${data.targetUserId}\n`);
+            }
+          } else {
+            // Socket is connected, but still send FCM push as backup for background scenarios
+            // This helps when app is in background and socket might be slow to deliver
+            if (hasFCMToken) {
+              process.stdout.write(`📱 Socket connected but sending FCM push as backup...\n`);
+              sendFCMPush(
+                data.targetUserId,
+                'Nieuwe oproep',
+                'Je hebt een oproep ontvangen',
+                {
+                  type: 'call:offer',
+                  fromUserId: socket.userId || '',
+                  targetUserId: data.targetUserId,
+                  callId: `call-${Date.now()}`
+                }
+              ).catch(err => {
+                console.error('❌ Failed to send backup FCM push:', err);
+              });
+            }
           }
           
           process.stdout.write(`✅✅✅ Call offer forwarded to: ${targetRoom}\n\n`);

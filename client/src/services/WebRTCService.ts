@@ -1448,6 +1448,21 @@ class WebRTCService {
     return this.remoteStream;
   }
 
+  // Check if video tracks are paused (app in background)
+  isVideoPaused(): boolean {
+    if (!this.localStream && !this.remoteStream) return false;
+    
+    // Check local video tracks
+    const localVideoTracks = this.localStream?.getVideoTracks() || [];
+    const localVideoPaused = localVideoTracks.some(track => !track.enabled && track.readyState === 'live');
+    
+    // Check remote video tracks
+    const remoteVideoTracks = this.remoteStream?.getVideoTracks() || [];
+    const remoteVideoPaused = remoteVideoTracks.some(track => !track.enabled && track.readyState === 'live');
+    
+    return localVideoPaused || remoteVideoPaused;
+  }
+
   // Debug info getter
   getDebugInfo(): {
     iceConnectionState: string | null;

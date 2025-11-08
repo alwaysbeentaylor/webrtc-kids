@@ -94,6 +94,7 @@ export function CallScreen({ targetUserId, targetUserName, isParent, remoteRole,
   const [permissions, setPermissions] = useState<CallPermissions>({ canEndCall: false, canCancelCall: false });
   const [error, setError] = useState<string | null>(null);
   const [isIncomingCall, setIsIncomingCall] = useState(false);
+  const [isVideoPaused, setIsVideoPaused] = useState(false);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
@@ -268,6 +269,9 @@ export function CallScreen({ targetUserId, targetUserName, isParent, remoteRole,
       const localStream = webrtcService.getCurrentLocalStream();
       const remoteStream = webrtcService.getCurrentRemoteStream();
 
+      // Check if video is paused
+      setIsVideoPaused(webrtcService.isVideoPaused());
+
       if (localVideoRef.current && localStream) {
         if (localVideoRef.current.srcObject !== localStream) {
           localVideoRef.current.srcObject = localStream;
@@ -377,6 +381,41 @@ export function CallScreen({ targetUserId, targetUserName, isParent, remoteRole,
             backgroundColor: '#000'
           }}
         />
+        
+        {/* Video paused overlay */}
+        {callState === 'active' && isVideoPaused && (
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            padding: '2rem',
+            borderRadius: '16px',
+            color: 'white',
+            textAlign: 'center',
+            zIndex: 1001,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '1rem',
+            minWidth: '250px'
+          }}>
+            <div style={{ 
+              fontSize: '4rem', 
+              animation: 'pulse 2s ease-in-out infinite',
+              filter: 'grayscale(100%)'
+            }}>
+              📷
+            </div>
+            <div>
+              <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem' }}>Camera gepauzeerd</h3>
+              <p style={{ margin: 0, fontSize: '0.9rem', opacity: 0.9 }}>
+                De camera is tijdelijk uitgeschakeld omdat de app in de achtergrond staat.
+              </p>
+            </div>
+          </div>
+        )}
         
         {/* Call status overlay */}
         {callState !== 'active' && (
