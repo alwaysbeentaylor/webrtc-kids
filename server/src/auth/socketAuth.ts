@@ -77,6 +77,12 @@ export async function authenticateSocket(socket: AuthenticatedSocket): Promise<b
       console.log('✅ PARENT AUTHENTICATED:', socket.id, 'User:', socket.userId);
       return true;
     } catch (verifyError) {
+      console.error('❌ Firebase verification failed:', verifyError);
+      // Log more details about the error
+      if (verifyError instanceof Error) {
+        console.error('❌ Error message:', verifyError.message);
+        console.error('❌ Error stack:', verifyError.stack);
+      }
       // Development fallback for unverified tokens
       if (process.env.NODE_ENV !== 'production') {
         try {
@@ -93,8 +99,7 @@ export async function authenticateSocket(socket: AuthenticatedSocket): Promise<b
           // Ignore
         }
       }
-      console.error('❌ Firebase verification failed:', verifyError);
-      return false;
+      throw verifyError;
     }
   } catch (error) {
     console.error('❌ AUTH EXCEPTION:', error);
