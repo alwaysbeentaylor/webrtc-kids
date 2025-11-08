@@ -51,6 +51,7 @@ class SocketService {
         await this.establishConnection();
         
         // Wait for connection to be established (with timeout)
+        console.log('⏳ Waiting for socket connection...', { socketExists: !!this.socket, alreadyConnected: this.socket?.connected });
         await new Promise<void>((resolve, reject) => {
           if (!this.socket) {
             reject(new Error('Socket not created'));
@@ -58,10 +59,19 @@ class SocketService {
           }
           
           const timeout = setTimeout(() => {
+            console.error(`⏰⏰⏰ Connection timeout after ${attempt === 1 ? 5 : 3} seconds! Socket state:`, {
+              exists: !!this.socket,
+              connected: this.socket?.connected,
+              disconnected: this.socket?.disconnected,
+              id: this.socket?.id
+            });
+            this.socket?.off('connect', onConnect);
+            this.socket?.off('connect_error', onError);
             reject(new Error(`Connection timeout after ${attempt === 1 ? 5 : 3} seconds`));
           }, attempt === 1 ? 5000 : 3000);
           
           const onConnect = () => {
+            console.log('✅✅✅ Connect event received in promise!');
             clearTimeout(timeout);
             this.socket?.off('connect', onConnect);
             this.socket?.off('connect_error', onError);
@@ -69,6 +79,7 @@ class SocketService {
           };
           
           const onError = (error: Error) => {
+            console.error('❌❌❌ Connect error received in promise:', error);
             clearTimeout(timeout);
             this.socket?.off('connect', onConnect);
             this.socket?.off('connect_error', onError);
@@ -76,9 +87,11 @@ class SocketService {
           };
           
           if (this.socket.connected) {
+            console.log('✅ Socket already connected, resolving immediately');
             clearTimeout(timeout);
             resolve();
           } else {
+            console.log('📡 Registering connect/connect_error listeners...');
             this.socket.once('connect', onConnect);
             this.socket.once('connect_error', onError);
           }
@@ -202,7 +215,10 @@ class SocketService {
       isMobile
     });
     
+    console.log('🔌🔌🔌 Creating Socket.IO instance...');
     this.socket = io(this.serverUrl, connectionOptions);
+    console.log('✅ Socket.IO instance created, socket exists:', !!this.socket, 'connected:', this.socket?.connected);
+    
     // Debug: expose socket for manual inspection
     (window as any).__webrtcSocket = this.socket;
 
